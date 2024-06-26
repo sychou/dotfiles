@@ -1,0 +1,56 @@
+#!/bin/sh
+# yadm bootstrap script for a new machine
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to install packages
+install_packages() {
+    for package in "$@"; do
+        echo "[BOOTSTRAP] Installing $package"
+        "$INSTALL_CMD" "$package"
+    done
+}
+
+# Check for the operating system and package manager
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo "[BOOTSTRAP] macOS detected."
+    # Install Homebrew if needed
+    if ! command_exists brew; then
+        echo "[BOOTSTRAP] Installing Homebrew"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    if command_exists brew; then
+        INSTALL_CMD="brew install"
+        PACKAGES="bat eza fd fzf gdu htop jq neovim pyenv ripgrep starship tldr"
+        install_packages $PACKAGES
+        echo "[BOOTSTRAP] Manually install Tailscale"
+    else
+        echo "[BOOTSTRAP] Homebrew installation failed."
+        exit 1
+    fi
+elif command_exists apt; then
+    echo "[BOOTSTRAP] Apt-based system detected (ubuntu optimized). Using apt."
+    INSTALL_CMD="sudo apt install -y"
+
+    # Update package lists
+    sudo apt update
+
+    # Install apt packages
+    PACKAGES="bat eza fd-find fzf gdu gpg htop jq neovim ripgrep tailscale tldr-py wget"
+    install_packages $PACKAGES
+
+    # Install Starship
+    echo "[BOOTSTRAP] Installing Starship (rc file is already configured)"
+    curl -sS https://starship.rs/install.sh | sh
+else
+    echo "[BOOTSTRAP] Neither Homebrew nor APT detected. Please install one of them first."
+    exit 1
+fi
+
+echo "[BOOTSTRAP] Setup is complete."
+echo "[BOOTSTRAP] You may need to run 'chsh' to change your shell to /usr/bin/zsh."
+echo "[BOOTSTRAP] Manually install Alacritty and/or Kitty"
+echo "[BOOTSTRAP] Please log out and log back in using zsh."
