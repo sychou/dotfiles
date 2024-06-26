@@ -24,7 +24,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
     fi
     if command_exists brew; then
         INSTALL_CMD="brew install"
-        PACKAGES="bat eza fd fzf gdu htop jq neovim pyenv ripgrep starship tldr"
+        PACKAGES="bat eza fd fzf gdu git htop jq neovim pyenv ripgrep starship tldr"
         install_packages $PACKAGES
         echo "[BOOTSTRAP] Manually install Tailscale"
     else
@@ -39,8 +39,13 @@ elif command_exists apt; then
     sudo apt update
 
     # Install apt packages
-    PACKAGES="bat eza fd-find fzf gdu gpg htop jq neovim ripgrep tailscale tldr-py wget"
+    PACKAGES="bat eza fd-find gdu git gpg htop jq neovim ripgrep tailscale tldr-py wget"
     install_packages $PACKAGES
+
+    # Install fzf (apt version is old)
+    echo "[SETUP] Installing fzf"
+    git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+    ~/.fzf/install
 
     # Install Starship
     echo "[BOOTSTRAP] Installing Starship (rc file is already configured)"
