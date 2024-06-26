@@ -17,8 +17,13 @@ bindkey -v
 setopt auto_cd
 cdpath=($HOME $HOME/Documents $HOME/src)
 
+# fzf
+if command_exists fzf; then
+    source <(fzf --zsh)
+fi
+
 # starship prompt
-if command -v starship > /dev/null 2>&1; then
+if command_exists starship; then
     eval "$(starship init zsh)"
 fi
 

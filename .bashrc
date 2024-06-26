@@ -17,7 +17,12 @@ set -o vi
 CDPATH="$HOME:$HOME/Documents:$HOME/src"
 export CDPATH
 
+# fzf
+if command_exists fzf; then
+    eval "$(fzf --bash)"
+fi
+
 # starship prompt
-if command -v starship > /dev/null 2>&1; then
+if command_exists starship; then
     eval "$(starship init bash)"
 fi
