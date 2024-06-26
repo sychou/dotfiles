@@ -1,0 +1,8 @@
+# Nethack configuration file
+OPTIONS=hilite_pet,color,lit_corridor,standout
+#OPTIONS=hilite_pet,color,lit_corridor,standout
+#OPTIONS=confirm,male,fixinv,safe_pet,sortpack,tombstone,!legacy,!mail
+#OPTIONS=verbose,fruit:tater,showexp,time,name:Malaprop,perm_invent,showscore
+OPTIONS=showscore,showexp
+OPTIONS=dogname:Nugget,catname:Dusty,horsename:Glue
+OPTIONS=!autopickup

@@ -1,0 +1,41 @@
+# ~/.profile
+#
+# Notes on this file:
+# 
+# - Be sure to maintain compatibility with sh (dash on Debian & Ubuntu)
+# - Executes for login and interactive shells
+# - Source this file from .bash_profile and .zprofile
+# - Ideal for storing environment variables
+# - Aliases and other interactive commands should be in rc files
+# - Keys and sensitive data should be stored in the encrypted .keys file
+
+echo "Loading .profile"
+
+# ENVIRONMENT VARIABLES
+export EDITOR=nvim
+export VISUAL=nvim
+
+# PATH
+[ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
+[ -d "$HOME/bin" ] && PATH="$HOME/.local/bin:$PATH"
+export PATH
+
+# HOMEBREW SETUP
+if [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -f /usr/local/bin/brew ]]; then
+    # Intel Mac backward compatible
+    eval "$(/usr/local/bin/brew shellenv)"
+fi
+
+# KEYS
+if [[ -f "$HOME/.keys" ]]; then
+    . "$HOME/.keys"
+fi
+
+# SOURCE .shrc IF INTERACTIVE SHELL
+# REMOVED TO DEFER TO .bashrc and .zshrc
+# NOTE: sh by default will not run .shrc
+# case "$-" in
+#     *i*) [ -f "$HOME/.shrc" ] && . "$HOME/.shrc" ;;
+# esac

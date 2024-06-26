@@ -1,0 +1,5 @@
+.mode column
+.headers on
+.width 10 20 30
+.nullvalue NULL
+.prompt 'sqlite> '

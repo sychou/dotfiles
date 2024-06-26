@@ -1,0 +1,95 @@
+# ~/.shrc
+#
+# Notes:
+# - This file is intended to be sourced by .profile if interactive shell
+
+echo "Loading .shrc"
+echo "Kernel Information: $(uname -smr)"
+echo "Shell: $($SHELL --version)"
+echo -ne "Uptime: "; uptime
+echo -ne "Server time is: "; date
+
+# EZA
+if command -v eza > /dev/null 2>&1; then
+    alias ls='eza --hyperlink -s extension'
+    alias la='ls -a'
+    alias ll='ls -l --no-quotes'
+    alias lla='ll -a'
+    alias llg='ll --git'
+    alias llc='ll -s created'
+else
+    echo "eza not installed - https://eza.rocks"
+    alias ls='ls --color=auto -F --hyperlink'
+    alias ll='ls -FGlh'
+    alias la='ls -Fa'
+    alias lla='ls -FGlha'
+fi
+
+# BAT
+if command -v batcat > /dev/null 2>&1; then
+   alias bat='batcat'
+else
+    if ! command -v bat > /dev/null 2>&1; then
+        echo "bat not installed - https://github.com/sharkdp/bat"
+    fi
+fi
+
+# Aliases
+alias vi='nvim'
+alias systail='tail -f /var/log/system.log'
+alias profileme="history | awk '{print \$2}' | \
+    awk 'BEGIN{FS=\"|\"}{print \$1}' | sort | uniq -c | sort -n | \
+    tail -n 20 | sort -nr"
+alias brewup='brew update; brew upgrade; brew cleanup; brew doctor'
+
+
+# GDU
+if command -v gdu-go > /dev/null 2>&1; then
+    alias gdu='gdu-go'
+fi
+
+
+# Tell grep to highlight matches
+export GREP_OPTIONS='--color=auto'
+
+# Default editor
+export EDITOR=nvim
+export VISUAL=nvim
+
+# fzf
+if [ -d "$HOME/.fzf/bin" ]; then
+    PATH="$HOME/.fzf/bin:$PATH"
+    export PATH
+elif [ -d "/opt/homebrew/opt/fzf/bin" ]; then
+    PATH="/opt/homebrew/opt/fzf/bin:$PATH"
+    export PATH
+fi
+if command -v fzf > /dev/null 2>&1; then
+    alias fzp="fzf --preview 'fzf-preview.sh {}'"
+    alias fzrm="fzf --preview 'fzf-preview.sh {}' --print0 -m | xargs -0 rm"
+    fzmv() {
+        destination="$1"
+        fzf --preview 'fzf-preview.sh {}' --print0 -m | while IFS= read -r -d '' file; do
+            mv "$file" "$destination"
+        done
+    }
+fi
+
+# pyenv
+if [ -d "$HOME/.pyenv/bin" ]; then
+    PATH="$HOME/.pyenv/bin:$PATH"
+fi
+if command -v pyenv > /dev/null 2>&1; then
+    export PYENV_ROOT="$HOME/.pyenv"
+    PATH="$PYENV_ROOT/shims:$PATH"
+    export PATH
+    eval "$(pyenv init -)"
+fi
+
+# Start SSH agent if not already running and if the SSH key exists
+if [ -z "$SSH_AUTH_SOCK" ]; then
+    eval "$(ssh-agent -s)"
+    if [ -f "$HOME/.ssh/id_rsa" ]; then
+        ssh-add "$HOME/.ssh/id_rsa"
+    fi
+fi

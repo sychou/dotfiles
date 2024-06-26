@@ -1,0 +1,6 @@
+# Readline configuration
+set completion-ignore-case on
+set editing-mode vi
+set show-all-if-ambiguous on
+set visible-stats on
+set convert-meta on
