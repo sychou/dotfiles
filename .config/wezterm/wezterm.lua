@@ -55,6 +55,7 @@ local mods = is_mac() and "SHIFT|CMD" or "SHIFT|CTRL"
 local keys = {
   -- Global keys
   { key = "T", mods = "CTRL", action = act.SpawnTab("DefaultDomain") },
+  { key = "P", mods = mods, action = wezterm.action.ActivateCommandPalette },
   -- Pane splitting
   { key = "-", mods = mods, action = act.SplitVertical({ domain = "CurrentPaneDomain" }) },
   { key = "|", mods = mods, action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) },
