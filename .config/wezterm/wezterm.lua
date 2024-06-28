@@ -43,7 +43,7 @@ local config = {
   font_size = 13.0,
   color_scheme = "nord",
   initial_cols = 120,
-  initial_rows = 30,
+  initial_rows = 60,
   window_background_opacity = 0.95,
   hide_tab_bar_if_only_one_tab = true,
 }
@@ -65,6 +65,7 @@ local keys = {
   { key = "k", mods = mods, action = act.ActivatePaneDirection("Up") },
   { key = "j", mods = mods, action = act.ActivatePaneDirection("Down") },
 }
+
 
 -- OS-specific configurations
 if is_mac() then
