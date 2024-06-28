@@ -2,8 +2,8 @@ local wezterm = require('wezterm')
 local act = wezterm.action
 local mux = wezterm.mux
 
--- Detect the current operating system
-local function is_mac()
+-- Functions to help determine the OS
+local function is_macos()
   return wezterm.target_triple == "x86_64-apple-darwin" or
          wezterm.target_triple == "aarch64-apple-darwin"
 end
@@ -12,29 +12,28 @@ local function is_linux()
   return wezterm.target_triple == "x86_64-unknown-linux-gnu"
 end
 
-local function is_windows()
+local function is_winos()
   return wezterm.target_triple == "x86_64-pc-windows-msvc"
 end
 
--- Function to center the window (unchanged)
-local function center_window(window, max_width, max_height)
+-- Function to center the window
+local function center_window(window)
   local window_dims = window:get_dimensions()
   local window_width = window_dims.pixel_width
   local window_height = window_dims.pixel_height
-  local x = (max_width - window_width) / 2
+  local max_width = screen.width
+  local max_height = screen.height
+   local x = (max_width - window_width) / 2
   local y = (max_height - window_height) / 2
   window:set_position(x, y)
 end
 
--- Event handler for window creation (unchanged)
+-- Event handler for window creation
 wezterm.on("gui-startup", function()
   local tab, pane, window = mux.spawn_window{}
-  local screen = wezterm.gui.screens()[1]
-  local max_width = screen.width
-  local max_height = screen.height
-  window:gui_window():maximize()
   wezterm.sleep_ms(10)
-  center_window(window:gui_window(), max_width, max_height)
+  local screen = wezterm.gui.screens().active
+  center_window(window:gui_window())
 end)
 
 -- Base configuration
@@ -49,12 +48,13 @@ local config = {
 }
 
 -- Set modifier keys based on OS
-local mods = is_mac() and "SHIFT|CMD" or "SHIFT|CTRL"
+local mods = is_macos() and "SHIFT|CMD" or "SHIFT|CTRL"
 
 -- Key bindings
 local keys = {
-  -- Global keys
+  -- General
   { key = "T", mods = "CTRL", action = act.SpawnTab("DefaultDomain") },
+  { key = "~", mods = "CTRL|SHIFT", action = act.ShowDebugOverlay },
   { key = "P", mods = mods, action = wezterm.action.ActivateCommandPalette },
   -- Pane splitting
   { key = "-", mods = mods, action = act.SplitVertical({ domain = "CurrentPaneDomain" }) },
@@ -68,22 +68,15 @@ local keys = {
 
 
 -- OS-specific configurations
-if is_mac() then
+if is_macos() then
   wezterm.log_info("Applying macOS configuration")
   config.font_size = 13.0
-  -- Placeholder for more macOS-specific configs
-  -- config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
-  -- config.macos_window_background_blur = 20
 elseif is_linux() then
   wezterm.log_info("Applying Linux configuration")
-  -- config.enable_wayland = true
-  -- config.enable_csi_u_key_encoding = true
-  -- config.term = "xterm-256color"
-elseif is_windows() then
+  config.font_size = 11.0
+  config.enable_wayland = true
+elseif is_winos() then
   wezterm.log_info("Applying Windows configuration")
-  -- config.default_prog = { "pwsh.exe", "-NoLogo" }
-  -- config.win32_system_backdrop = "Acrylic"
-  -- config.win32_acrylic_opacity = 0.8
 else
   wezterm.log_warning("Unknown OS, using default configuration")
 end
