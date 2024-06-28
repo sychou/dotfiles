@@ -21,9 +21,10 @@ local function center_window(window)
   local window_dims = window:get_dimensions()
   local window_width = window_dims.pixel_width
   local window_height = window_dims.pixel_height
+  local screen = wezterm.gui.screens().active
   local max_width = screen.width
   local max_height = screen.height
-   local x = (max_width - window_width) / 2
+  local x = (max_width - window_width) / 2
   local y = (max_height - window_height) / 2
   window:set_position(x, y)
 end
@@ -31,8 +32,7 @@ end
 -- Event handler for window creation
 wezterm.on("gui-startup", function()
   local tab, pane, window = mux.spawn_window{}
-  wezterm.sleep_ms(10)
-  local screen = wezterm.gui.screens().active
+  wezterm.sleep_ms(50)
   center_window(window:gui_window())
 end)
 
