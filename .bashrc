@@ -17,6 +17,13 @@ set -o vi
 CDPATH="$HOME:$HOME/Documents:$HOME/src"
 export CDPATH
 
+# bash command history
+HISTFILE=~/.bash_history
+HISTSIZE=10000
+HISTFILESIZE=2000
+HISTCONTROL=ignoredups:erasedups
+shopt -s histappend
+
 # fzf
 if command_exists fzf; then
     eval "$(fzf --bash)"

@@ -17,6 +17,16 @@ bindkey -v
 setopt auto_cd
 cdpath=($HOME $HOME/Documents $HOME/src)
 
+# zsh history
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt share_history
+setopt append_history
+setopt inc_append_history
+setopt hist_ignore_dups
+setopt hist_ignore_space
+
 # fzf
 if command_exists fzf; then
     source <(fzf --zsh)
