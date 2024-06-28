@@ -39,7 +39,7 @@ elif command_exists apt; then
     sudo apt update
 
     # Install apt packages
-    PACKAGES="bat eza fd-find gdu git gpg htop jq neovim ripgrep tailscale tldr-py wget"
+    PACKAGES="bat eza fd-find gcc gdu git gpg htop jq neovim ripgrep tailscale tldr-py wget"
     install_packages $PACKAGES
 
     # Install fzf (apt version is old)
