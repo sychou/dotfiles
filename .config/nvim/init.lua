@@ -1,3 +1,6 @@
+-- Set leader key to space
+vim.g.mapleader = ' '
+
 -- General settings
 local options = {
     expandtab = true,
@@ -114,7 +117,8 @@ local plugins = {
     },
     -- Telescope for fuzzy finding
     {
-        "nvim-telescope/telescope.nvim", tag = '0.1.6',
+        "nvim-telescope/telescope.nvim",
+        tag = '0.1.6',
         dependencies = { 'nvim-lua/plenary.nvim' }
     },
 }
