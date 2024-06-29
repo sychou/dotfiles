@@ -32,8 +32,11 @@ end
 -- Event handler for window creation
 wezterm.on("gui-startup", function()
     local tab, pane, window = mux.spawn_window {}
-    wezterm.sleep_ms(50)
-    center_window(window:gui_window())
+    -- Linux using wayland doesn't allow for repositioning
+    if not is_linux() then
+        wezterm.sleep_ms(50)
+        center_window(window:gui_window())
+    end
 end)
 
 -- Base configuration
