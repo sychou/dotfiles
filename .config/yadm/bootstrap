@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # yadm bootstrap script for a new machine
 
 # Function to check if a command exists
@@ -10,46 +10,81 @@ command_exists() {
 install_packages() {
     for package in "$@"; do
         echo "[BOOTSTRAP] Installing $package"
-        "$INSTALL_CMD" "$package"
+        $INSTALL_CMD "$package"
     done
+}
+
+# Function to install a font (for ubuntu)
+install_font() {
+    FONT_DIR="/usr/local/share/fonts"
+    mkdir -p "$HOME/tmp"
+    curl -L -o "$HOME/tmp/$1.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/$1.zip"
+    sudo unzip "$HOME/tmp/$1.zip" -d "$FONT_DIR"
+    rm "$HOME/tmp/$1.zip"
+    echo "[BOOTSTRAP] Installed font: $1"
 }
 
 # Check for the operating system and package manager
 if [[ "$(uname)" == "Darwin" ]]; then
+
     echo "[BOOTSTRAP] macOS detected."
+
     # Install Homebrew if needed
     if ! command_exists brew; then
         echo "[BOOTSTRAP] Installing Homebrew"
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
+    
+    # Install brew packages
     if command_exists brew; then
+        brew update
         INSTALL_CMD="brew install"
-        PACKAGES="bat eza fd fzf gdu git htop jq neovim pyenv ripgrep starship tldr"
+        PACKAGES="bat eza fd fzf gdu git htop jless jq neovim pyenv ripgrep starship tldr"
         install_packages $PACKAGES
         echo "[BOOTSTRAP] Manually install Tailscale"
     else
         echo "[BOOTSTRAP] Homebrew installation failed."
         exit 1
     fi
-elif command_exists apt; then
-    echo "[BOOTSTRAP] Apt-based system detected (ubuntu optimized). Using apt."
-    INSTALL_CMD="sudo apt install -y"
 
-    # Update package lists
-    sudo apt update
+elif command_exists apt; then
+
+    echo "[BOOTSTRAP] Apt-based system detected (Ubuntu optimized). Using apt."
 
     # Install apt packages
+    sudo apt update
+    INSTALL_CMD="sudo apt install -y"
     PACKAGES="bat eza fd-find gcc gdu git gpg htop jq neovim ripgrep tailscale tldr-py wget"
     install_packages $PACKAGES
 
-    # Install fzf (apt version is old)
-    echo "[SETUP] Installing fzf"
+    # Install jless
+    mkdir -p $HOME/tmp
+    mkdir -p $HOME/bin
+    curl -L -o $HOME/tmp/jless.zip https://github.com/PaulJuliusMartinez/jless/releases/download/v0.9.0/jless-v0.9.0-x86_64-unknown-linux-gnu.zip
+    unzip $HOME/tmp/jless.zip -d $HOME/bin
+    rm $HOME/tmp/jless.zip
+
+    # Install fzf from github (apt package is typically outdated)
+    echo "[BOOTSTRAP] Installing fzf"
     git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
     ~/.fzf/install
+
+    # Install fonts
+    install_font "FiraCode"
 
     # Install Starship
     echo "[BOOTSTRAP] Installing Starship (rc file is already configured)"
     curl -sS https://starship.rs/install.sh | sh
+
+    # Install GUI tools
+    # TODO Change to install packages
+    if xset q &>/dev/null; then
+        echo "[BOOTSTRAP] GUI detected. Consider manually installing:"
+        echo "  - wezterm"
+        echo "  - brave browser"
+        echo "  - 1password"
+        echo "  - raindrop"
+    fi
 else
     echo "[BOOTSTRAP] Neither Homebrew nor APT detected. Please install one of them first."
     exit 1
