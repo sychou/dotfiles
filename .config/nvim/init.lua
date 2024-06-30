@@ -1,37 +1,43 @@
 -- Set leader key to space
-vim.g.mapleader = ' '
+-- vim.g.mapleader = ' '
+
+vim.cmd('source ~/.vimrc')
+
+-- vim.cmd('colorscheme lunaperche')
+-- Set nvim to transparent background
+--vim.cmd('highlight Normal guibg=NONE ctermbg=NONE')
 
 -- General settings
-local options = {
-    expandtab = true,
-    tabstop = 4,
-    shiftwidth = 4,
-    softtabstop = 4,
-    number = true,
-    relativenumber = true,
-    cursorline = true,
-    mouse = 'a',
-    backup = false,
-    writebackup = false,
-    undofile = true,
-    ignorecase = true,
-    smartcase = true,
-    incsearch = true,
-    hlsearch = true,
-    cmdheight = 2,
-    autoindent = true,
-    smartindent = true,
-    splitright = true,
-    splitbelow = true,
-    updatetime = 300,
-    clipboard = 'unnamedplus'
-}
-
--- Apply each option
-for k, v in pairs(options) do
-    vim.o[k] = v
-end
-
+-- local options = {
+--     expandtab = true,
+--     tabstop = 4,
+--     shiftwidth = 4,
+--     softtabstop = 4,
+--     number = true,
+--     relativenumber = true,
+--     cursorline = true,
+--     mouse = 'a',
+--     backup = false,
+--     writebackup = false,
+--     undofile = true,
+--     ignorecase = true,
+--     smartcase = true,
+--     incsearch = true,
+--     hlsearch = true,
+--     cmdheight = 2,
+--     autoindent = true,
+--     smartindent = true,
+--     splitright = true,
+--     splitbelow = true,
+--     updatetime = 300,
+--     clipboard = 'unnamedplus'
+-- }
+--
+-- -- Apply each option
+-- for k, v in pairs(options) do
+--     vim.o[k] = v
+-- end
+--
 -- Lazy package manager setup
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
