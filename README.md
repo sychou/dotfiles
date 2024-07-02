@@ -34,3 +34,13 @@ haven't loaded up neovim for whatever reason.
 
 My main terminal is wezterm so it's configuration will be the most up-to-date.
 There is an alacritty config file as well but it may be out of date.
+
+## Color Schemes
+
+The following are good and robust color schemes with nvim and wezterm support:
+
+- [Nord](https://www.nordtheme.com/ports/vim)
+- [Tokyo Night](https://github.com/folke/tokyonight.nvim)
+- [Gruvbox](https://github.com/ellisonleao/gruvbox.nvim)
+
+These even have good Obsidian theme support!

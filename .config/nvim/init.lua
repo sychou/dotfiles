@@ -54,7 +54,34 @@ vim.opt.rtp:prepend(lazypath)
 
 -- Plugin management with lazy.nvim
 local plugins = {
-    -- Lualine statusline
+    -- Nord
+    {
+        "gbprod/nord.nvim",
+        lazy = false,
+        priority = 1000,
+        config = function()
+            require("nord").setup({})
+            vim.cmd.colorscheme("nord")
+        end,
+        install = {
+            colorscheme = { "nord" },
+        },
+    },
+    -- Gruvbox
+    { 
+        "ellisonleao/gruvbox.nvim", 
+        priority = 1000, 
+        config = true, 
+        opts = {} 
+    },
+    -- Tokyonight
+    {
+        "folke/tokyonight.nvim",
+        lazy = false,
+        priority = 1000,
+        opts = {},
+    },
+     -- Lualine statusline
     {
         'nvim-lualine/lualine.nvim',
         requires = { 'kyazdani42/nvim-web-devicons', opt = true }
@@ -131,9 +158,18 @@ local plugins = {
 
 require("lazy").setup(plugins, {})
 
+-- Set color scheme
+-- vim.cmd[[colorscheme nord]]
+-- vim.cmd[[colorscheme gruvbox]]
+vim.cmd[[colorscheme tokyonight-night]]
+
 -- Lualine setup
 require('lualine').setup {
-    options = { theme = 'solarized_dark' }
+    options = { 
+        -- theme = 'gruvbox' 
+        -- theme = 'nord' 
+        theme = 'tokyonight' 
+    }
 }
 
 -- Custom key mappings for Telescope

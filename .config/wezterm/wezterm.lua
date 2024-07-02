@@ -43,8 +43,9 @@ end)
 local config = {
     font = wezterm.font("FiraCode Nerd Font Mono"),
     font_size = 13.0,
-    color_scheme = "nord",
-    -- color_scheme = "Slate",
+    -- color_scheme = "GruvboxDark",
+    -- color_scheme = "nord",
+    color_scheme = "tokyonight",
     initial_cols = 120,
     -- TODO Adjust this so it varies based on the size of the screen
     initial_rows = 45,
