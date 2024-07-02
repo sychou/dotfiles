@@ -44,8 +44,10 @@ local config = {
     font = wezterm.font("FiraCode Nerd Font Mono"),
     font_size = 13.0,
     color_scheme = "nord",
+    -- color_scheme = "Slate",
     initial_cols = 120,
-    initial_rows = 60,
+    -- TODO Adjust this so it varies based on the size of the screen
+    initial_rows = 45,
     window_background_opacity = 0.95,
     hide_tab_bar_if_only_one_tab = true,
 }
