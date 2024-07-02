@@ -114,13 +114,13 @@ local plugins = {
     -- nvim-cmp for autocompletion
     {
         "hrsh7th/nvim-cmp",
-        requires = {
+        dependencies = {
             "hrsh7th/cmp-nvim-lsp",
             "hrsh7th/cmp-buffer",
             "hrsh7th/cmp-path",
             "hrsh7th/cmp-cmdline",
             "hrsh7th/vim-vsnip",
-            "hrsh7th/cmp-vsnip"
+            "hrsh7th/cmp-vsnip",
         },
         config = function()
             local cmp = require 'cmp'
@@ -133,7 +133,7 @@ local plugins = {
                 mapping = {
                     ['<C-d>'] = cmp.mapping.scroll_docs(-4),
                     ['<C-f>'] = cmp.mapping.scroll_docs(4),
-                    ['<C-Space>'] = cmp.mapping.complete(),
+                    ['<C-l>'] = cmp.mapping.complete(),
                     ['<C-e>'] = cmp.mapping.close(),
                     ['<CR>'] = cmp.mapping.confirm({
                         behavior = cmp.ConfirmBehavior.Replace,
@@ -141,9 +141,10 @@ local plugins = {
                     }),
                 },
                 sources = {
-                    { name = 'nvim_lsp' },
-                    { name = 'vsnip' },
-                    { name = 'buffer' },
+                    { name = 'nvim_lsp' },  -- LSP completions
+                    { name = 'vsnip' },     -- Snippet completions
+                    { name = 'buffer' },    -- Buffer completions
+                    { name = 'path' },      -- File path completions
                 }
             }
         end
