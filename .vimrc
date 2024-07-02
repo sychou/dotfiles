@@ -66,7 +66,10 @@ set clipboard=unnamedplus
 
 " Set a colorscheme
 "colorscheme lunaperche
-colorscheme zaibatsu
+"colorscheme zaibatsu
+"colorscheme slate
+colorscheme nord
+"highlight Normal guibg=NONE ctermbg=NONE
 
 " Change the default mapleader
 let mapleader=" "
