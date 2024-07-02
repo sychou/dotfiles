@@ -64,6 +64,7 @@ set updatetime=300
 " Use the system clipboard
 set clipboard=unnamedplus
 
+set background=dark
 " Set a colorscheme
 "colorscheme lunaperche
 "colorscheme zaibatsu
