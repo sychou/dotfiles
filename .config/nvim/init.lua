@@ -154,6 +154,26 @@ end, { nargs = 1, complete = function()
     return { "gruvbox", "nord", "tokyonight" }
 end })
 
+-- Python script runner setup
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "python",
+  callback = function()
+    -- Set up a local key mapping for Python files
+    vim.api.nvim_buf_set_keymap(0, 'n', '<F5>', ':w<CR>:split<CR>:terminal python3 %<CR>', { noremap = true, silent = true })
+  end
+})
+
+-- Create a command to run Python scripts
+vim.api.nvim_create_user_command('RunPython', function()
+    vim.cmd('w') -- Save the file
+    vim.cmd('split') -- Split the window
+    vim.cmd('terminal python3 %') -- Run the current file in the terminal
+end, {})
+
+-- Add a global keymap for running Python scripts
+vim.api.nvim_set_keymap('n', '<leader>rp', ':RunPython<CR>', { noremap = true, silent = true })
+
+
 -- Keymappings
 local function map(mode, lhs, rhs, opts)
     local options = { noremap = true, silent = true }
