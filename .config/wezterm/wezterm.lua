@@ -41,7 +41,8 @@ end)
 
 -- Base configuration
 local config = {
-    font = wezterm.font("FiraCode Nerd Font Mono"),
+    -- font = wezterm.font("FiraCode Nerd Font Mono"),
+    font = wezterm.font("JetBrainsMono Nerd Font"),
     font_size = 13.0,
     -- color_scheme = "GruvboxDark",
     -- color_scheme = "nord",
@@ -79,7 +80,7 @@ if is_macos() then
     config.font_size = 13.0
 elseif is_linux() then
     wezterm.log_info("Applying Linux configuration")
-    config.font_size = 11.0
+    config.font_size = 12.0
     config.enable_wayland = true
 elseif is_winos() then
     wezterm.log_info("Applying Windows configuration")
