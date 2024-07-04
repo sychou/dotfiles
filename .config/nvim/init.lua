@@ -42,14 +42,13 @@ local plugins = {
         priority = 1000,
         opts = {},
     },
-
-    -- UI enhancements
+    -- Lualine
     {
         'nvim-lualine/lualine.nvim',
         dependencies = { 'kyazdani42/nvim-web-devicons', opt = true }
     },
 
-    -- Syntax and language support
+    -- Treesitter
     {
         "nvim-treesitter/nvim-treesitter",
         build = ":TSUpdate",
@@ -65,8 +64,7 @@ local plugins = {
             }
         end
     },
-
-    -- LSP and autocompletion
+    -- Language server
     {
         "neovim/nvim-lspconfig",
         config = function()
@@ -74,6 +72,7 @@ local plugins = {
             require('lspconfig').tsserver.setup {}
         end
     },
+    -- CMP Autocompletion  
     {
         "hrsh7th/nvim-cmp",
         dependencies = {
@@ -111,12 +110,18 @@ local plugins = {
             }
         end
     },
-
-    -- Fuzzy finder
+    -- Telescope Fuzzy finder
     {
         "nvim-telescope/telescope.nvim",
         tag = '0.1.6',
         dependencies = { 'nvim-lua/plenary.nvim' }
+    },
+    -- GitSigns
+    {
+        'lewis6991/gitsigns.nvim',
+        config = function()
+            require('gitsigns').setup()
+        end
     },
 }
 
@@ -186,3 +191,13 @@ map('n', '<leader>ff', ':Telescope find_files<CR>')
 map('n', '<leader>fg', ':Telescope live_grep<CR>')
 map('n', '<leader>fb', ':Telescope buffers<CR>')
 map('n', '<leader>fh', ':Telescope help_tags<CR>')
+
+-- Gitsigns keymappings
+map('n', ']c', '<cmd>Gitsigns next_hunk<CR>')
+map('n', '[c', '<cmd>Gitsigns prev_hunk<CR>')
+map('n', '<leader>hs', '<cmd>Gitsigns stage_hunk<CR>')
+map('n', '<leader>hu', '<cmd>Gitsigns undo_stage_hunk<CR>')
+map('n', '<leader>hr', '<cmd>Gitsigns reset_hunk<CR>')
+map('n', '<leader>hp', '<cmd>Gitsigns preview_hunk<CR>')
+map('n', '<leader>hb', '<cmd>Gitsigns blame_line<CR>')
+
