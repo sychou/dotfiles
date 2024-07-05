@@ -39,7 +39,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
     if command_exists brew; then
         brew update
         INSTALL_CMD="brew install"
-        PACKAGES="bat eza fd fzf gdu git htop jless jq libb2 neovim pyenv ripgrep starship tldr"
+        PACKAGES="bat eza fd fzf gdu git htop jless jq libb2 luarocks neovim pyenv ripgrep starship tldr"
         install_packages $PACKAGES
         echo "[BOOTSTRAP] Manually install Tailscale"
     else
