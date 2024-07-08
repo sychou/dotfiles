@@ -9,15 +9,11 @@ command_exists() {
 # Function to install a font (for ubuntu)
 install_font() {
     FONT_DIR="/usr/local/share/fonts"
-    if [ -f "$FONT_DIR/$1.ttf" ]; then
-        echo "[BOOTSTRAP] Font $1 is already installed."
-    else
-        echo "[BOOTSTRAP] Installing font: $1"
-        mkdir -p "$HOME/tmp"
-        curl -L -o "$HOME/tmp/$1.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/$1.zip"
-        sudo unzip "$HOME/tmp/$1.zip" -d "$FONT_DIR"
-        rm "$HOME/tmp/$1.zip"
-    fi
+    echo "[BOOTSTRAP] Installing font: $1"
+    mkdir -p "$HOME/tmp"
+    curl -L -o "$HOME/tmp/$1.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/$1.zip"
+    sudo unzip "$HOME/tmp/$1.zip" -d "$FONT_DIR"
+    rm "$HOME/tmp/$1.zip"
 }
 
 # Check for the operating system
@@ -32,65 +28,53 @@ if [[ "$(uname)" == "Darwin" ]]; then
         until xcode-select -p &> /dev/null; do
             sleep 5
         done
-    else
-        echo "[BOOTSTRAP] Xcode Command Line Tools already installed."
     fi
 
     # Install Homebrew if needed
     if ! command_exists brew; then
         echo "[BOOTSTRAP] Installing Homebrew"
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-        echo "[BOOTSTRAP] Homebrew already installed."
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
     
     # Install brew packages
     if command_exists brew; then
-        echo "[BOOTSTRAP] Installing packages"
+        echo "[BOOTSTRAP] Installing/Updating packages"
         brew update
-        for package in bat btop eza fd fzf gdu git htop jless jq libb2 luarocks neovim node ripgrep starship tldr tmux visidata; do
-            if brew list $package &>/dev/null; then
-                echo "[BOOTSTRAP] $package is already installed."
-            else
-                brew install $package
-            fi
-        done
-        
-        # Check if pyenv is installed
-        if ! command_exists pyenv; then
-            echo "[BOOTSTRAP] Installing pyenv"
-            brew install pyenv
-        else
-            echo "[BOOTSTRAP] pyenv is already installed."
-        fi
+        brew install \
+            bat \
+            btop \
+            eza \
+            fd \
+            fzf \
+            gdu \
+            git \
+            htop \
+            jless \
+            jq \
+            libb2 \
+            luarocks \
+            neovim \
+            node \
+            pyenv \
+            ripgrep \
+            starship \
+            tldr \
+            tmux \
+            visidata
 
         # Install fonts
         echo "[BOOTSTRAP] Installing fonts"
         brew tap homebrew/cask-fonts
-        for font in font-fira-code-nerd-font font-jetbrains-mono-nerd-font; do
-            if brew list --cask $font &>/dev/null; then
-                echo "[BOOTSTRAP] $font is already installed."
-            else
-                brew install --cask $font
-            fi
-        done
+        brew install --cask \
+            font-fira-code-nerd-font \
+            font-jetbrains-mono-nerd-font
 
         echo "[BOOTSTRAP] Installing casks"
-        # Check if Tailscale is installed
-        if ! command_exists tailscale; then
-            echo "[BOOTSTRAP] Installing Tailscale"
-            brew install --cask tailscale
-        else
-            echo "[BOOTSTRAP] Tailscale is already installed."
-        fi
-        
-        if ! command_exists wezterm; then
-            brew install --cask wezterm
-        else
-            echo "[BOOTSTRAP] WezTerm is already installed."
-        fi
+        brew install --cask \
+            tailscale \
+            wezterm
 
-   else
+    else
         echo "[BOOTSTRAP] Homebrew installation failed."
         exit 1
     fi
@@ -100,83 +84,80 @@ elif command_exists apt; then
 
     # Install apt packages
     sudo apt update
-    for package in bat btop curl eza fd-find gcc gdu git gpg htop jq luarocks neovim ripgrep visidata; do
-        if command_exists $package; then
-            echo "[BOOTSTRAP] $package is already installed."
-        else
-            sudo apt install -y $package
-        fi
-    done
+    sudo apt install -y \
+        bat \
+        btop \
+        curl \
+        eza \
+        fd-find \
+        gcc \
+        gdu \
+        git \
+        gpg \
+        htop \
+        jq \
+        luarocks \
+        neovim \
+        ripgrep \
+        tailscale \
+        visidata
 
-    # Check if Tailscale is installed
-    if ! command_exists tailscale; then
-        echo "[BOOTSTRAP] Installing Tailscale"
-        sudo apt install -y tailscale
-    else
-        echo "[BOOTSTRAP] Tailscale is already installed."
-    fi
-
-    # Check if pyenv is installed
+    # Install pyenv
     if ! command_exists pyenv; then
         echo "[BOOTSTRAP] Installing pyenv"
-        sudo apt install -y build-essential libssl-dev zlib1g-dev \
-            libbz2-dev libreadline-dev libsqlite3-dev \
-            libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev \
+        sudo apt install -y \
+            build-essential \
+            libssl-dev \
+            zlib1g-dev \
+            libbz2-dev \
+            libreadline-dev \
+            libsqlite3-dev \
+            libncursesw5-dev \
+            xz-utils \
+            tk-dev \
+            libxml2-dev \
+            libxmlsec1-dev \
+            libffi-dev \
             liblzma-dev
         curl https://pyenv.run | bash
-    else
-        echo "[BOOTSTRAP] pyenv is already installed."
     fi
 
-    # Check and install tldr
-    if ! command_exists tldr; then
-        echo "[BOOTSTRAP] Installing tldr"
-        pip install tldr
-        tldr -u
-    else
-        echo "[BOOTSTRAP] tldr is already installed."
-    fi
+    # Install tldr
+    pip install tldr
+    tldr -u
 
-    # Check and install node
+    # Install node
     if ! command_exists node; then
         echo "[BOOTSTRAP] Installing node"
         curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
         export NVM_DIR="$HOME/.nvm"
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
         nvm install 20
-    else
-        echo "[BOOTSTRAP] node is already installed."
     fi
 
-    # Check and install jless
+    # Install jless
     if ! command_exists jless; then
         echo "[BOOTSTRAP] Installing jless"
         mkdir -p $HOME/tmp $HOME/bin
         curl -L -o $HOME/tmp/jless.zip https://github.com/PaulJuliusMartinez/jless/releases/download/v0.9.0/jless-v0.9.0-x86_64-unknown-linux-gnu.zip
         unzip $HOME/tmp/jless.zip -d $HOME/bin
         rm $HOME/tmp/jless.zip
-    else
-        echo "[BOOTSTRAP] jless is already installed."
     fi
 
-    # Check and install fzf
+    # Install fzf
     if ! command_exists fzf; then
         echo "[BOOTSTRAP] Installing fzf"
         git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
         ~/.fzf/install
-    else
-        echo "[BOOTSTRAP] fzf is already installed."
     fi
 
-    # Check and install Starship
+    # Install Starship
     if ! command_exists starship; then
         echo "[BOOTSTRAP] Installing Starship"
         curl -sS https://starship.rs/install.sh | sh
-    else
-        echo "[BOOTSTRAP] Starship is already installed."
     fi
 
-    # TODO Check for GUI
+    # Check for GUI
     if xset q &>/dev/null; then
         echo "[BOOTSTRAP] GUI detected. Installing gui apps."
 
@@ -185,15 +166,13 @@ elif command_exists apt; then
         install_font "FiraCode"
         install_font "JetBrainsMono"
 
-        # Check and install WezTerm
+        # Install WezTerm
         if ! command_exists wezterm; then
             echo "[BOOTSTRAP] Installing WezTerm"
             curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
             echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list
             sudo apt update
             sudo apt install -y wezterm
-        else
-            echo "[BOOTSTRAP] WezTerm is already installed."
         fi
 
         echo "[BOOTSTRAP] Manually install:"
@@ -212,19 +191,13 @@ fi
 echo "[BOOTSTRAP] Setting up pyenv and installing Python 3.11.9"
 export PATH="$HOME/.pyenv/bin:$PATH"
 eval "$(pyenv init -)"
-if ! pyenv versions | grep -q 3.11.9; then
-    pyenv install 3.11.9
-else
-    echo "[BOOTSTRAP] Python 3.11.9 is already installed."
-fi
+pyenv install 3.11.9
 pyenv global 3.11.9
 
-# Check if tpm is already cloned
+# Clone tpm if not already present
 if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
     echo "[BOOTSTRAP] Cloning tpm"
     git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-else
-    echo "[BOOTSTRAP] tpm is already installed."
 fi
 
 echo "[BOOTSTRAP] Setup is complete."
