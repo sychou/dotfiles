@@ -28,9 +28,3 @@ if [[ -f "$HOME/.keys" ]]; then
     . "$HOME/.keys"
 fi
 
-# SOURCE .shrc IF INTERACTIVE SHELL
-# REMOVED TO DEFER TO .bashrc and .zshrc
-# NOTE: sh by default will not run .shrc
-# case "$-" in
-#     *i*) [ -f "$HOME/.shrc" ] && . "$HOME/.shrc" ;;
-# esac

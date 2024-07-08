@@ -1,7 +1,7 @@
 # ~/.shrc
 #
 # Notes:
-# - This file is intended to be sourced by .profile if interactive shell
+# - This file should be sourced by .bashrc and .zshrc
 
 # Function to check if a command exists
 command_exists() {
@@ -14,7 +14,14 @@ echo "Shell: $($SHELL --version)"
 echo -ne "Uptime: "; uptime
 echo -ne "Server time is: "; date
 
-# EZA
+# Misc aliases
+alias systail='tail -f /var/log/system.log'
+alias profileme="history | awk '{print \$2}' | \
+    awk 'BEGIN{FS=\"|\"}{print \$1}' | sort | uniq -c | sort -n | \
+    tail -n 20 | sort -nr"
+alias brewup='brew update; brew upgrade; brew cleanup; brew doctor'
+
+# eza
 if command_exists eza; then
     alias ls='eza --hyperlink -s extension'
     alias la='ls -a'
@@ -30,7 +37,7 @@ else
     alias lla='ls -FGlha'
 fi
 
-# BAT
+# bat
 if command_exists batcat; then
     alias bat='batcat'
 else
@@ -39,27 +46,20 @@ else
     fi
 fi
 
-# Aliases
-alias vi='nvim'
-alias systail='tail -f /var/log/system.log'
-alias profileme="history | awk '{print \$2}' | \
-    awk 'BEGIN{FS=\"|\"}{print \$1}' | sort | uniq -c | sort -n | \
-    tail -n 20 | sort -nr"
-alias brewup='brew update; brew upgrade; brew cleanup; brew doctor'
-
-
-# GDU
+# gdu
 if command_exists gdu-go; then
     alias gdu='gdu-go'
 fi
 
-
 # Tell grep to highlight matches
 export GREP_OPTIONS='--color=auto'
 
-# Default editor
-export EDITOR=nvim
-export VISUAL=nvim
+# nvim
+if command_exists nvim; then
+    alias vi='nvim'
+    export EDITOR=nvim
+    export VISUAL=nvim
+fi
 
 # fzf
 if [ -d "/opt/homebrew/opt/fzf/bin" ]; then
@@ -69,16 +69,26 @@ elif [ -d "$HOME/.fzf/bin/fzf" ]; then
     PATH="/$HOME/.fzf/bin/fzf":$PATH
     export PATH
 fi
+
 if command -v fzf > /dev/null 2>&1; then
     alias fzp="fzf --preview 'fzf-preview.sh {}'"
     alias fzrm="fzf --preview 'fzf-preview.sh {}' --print0 -m | xargs -0 rm"
     fzmv() {
         destination="$1"
+        if [ -z "$destination" ]; then
+            echo "Usage: fzmv <destination>"
+            return 1
+        fi
+
         fzf --preview 'fzf-preview.sh {}' --print0 -m | while IFS= read -r -d '' file; do
-            mv "$file" "$destination"
+            mv -- "$file" "$destination"
         done
     }
+    fzgadd() {
+        git add $(git status -s | fzf -m | awk '{print $2}')
+    }
 fi
+
 
 # pyenv
 if [ -d "$HOME/.pyenv/bin" ]; then
