@@ -21,11 +21,11 @@ cdpath=($HOME $HOME/Documents $HOME/src)
 HISTFILE=~/.zsh_history
 HISTSIZE=10000
 SAVEHIST=10000
-setopt share_history
-setopt append_history
-setopt inc_append_history
-setopt hist_ignore_dups
-setopt hist_ignore_space
+setopt SHARE_HISTORY
+setopt APPEND_HISTORY
+setopt INC_APPEND_HISTORY
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
 
 # fzf
 if command_exists fzf; then
