@@ -22,6 +22,31 @@ My main shell is zsh but I wanted to retain backward compatbility with sh
 Note that `.shrc` is not loaded by dash (sh) by default. If using dash, manually
 source `.shrc` by `source .shrc`.
 
+### Installed apps
+
+While there are a number of installed support apps and libraries, the common
+apps include:
+
+bat
+btop
+eza
+fd
+fzf
+gdu
+git
+htop
+jless
+jq
+neovim
+node
+pyenv
+ripgrep (rg)
+starship
+tailscale
+tldr
+tmux
+visidata
+
 ## vim and neovim
 
 My main editor is neovim but I wanted to have vim be usable on systems where I
@@ -44,3 +69,4 @@ The following are good and robust color schemes with nvim and wezterm support:
 - [Gruvbox](https://github.com/ellisonleao/gruvbox.nvim)
 
 These even have good Obsidian theme support!
+
