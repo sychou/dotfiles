@@ -1,8 +1,9 @@
 -- init.lua
 
 -- Theme configuration
--- Set this variable to "gruvbox", "nord", or "tokyonight" to change the theme
-local chosen_theme = "tokyonight"
+-- Set this variable to "catppuccin", "gruvbox", "nord", or "tokyonight" to change the theme
+-- Catpuccin also supports catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, catppuccin-mocha
+local chosen_theme = "catppuccin-mocha"
 
 -- Source .vimrc for backward compatibility
 vim.cmd('source ~/.vimrc')
@@ -24,6 +25,11 @@ vim.opt.rtp:prepend(lazypath)
 -- Plugin definitions
 local plugins = {
     -- Color schemes
+    {   
+        "catppuccin/nvim", 
+        name = "catppuccin", 
+        priority = 1000 
+    },
     {
         "ellisonleao/gruvbox.nvim",
         priority = 1000,
@@ -148,6 +154,7 @@ require("lazy").setup(plugins, {})
 -- Theme application function
 function _G.apply_theme(theme)
     vim.o.background = "dark"
+    vim.opt.termguicolors = true
     local colorscheme = theme
     local lualine_theme = theme
 
@@ -173,7 +180,7 @@ apply_theme(chosen_theme)
 vim.api.nvim_create_user_command('Theme', function(opts)
     apply_theme(opts.args)
 end, { nargs = 1, complete = function()
-    return { "gruvbox", "nord", "tokyonight" }
+    return { "catppuccin", "gruvbox", "nord", "tokyonight" }
 end })
 
 -- Python script runner setup

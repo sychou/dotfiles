@@ -27,25 +27,25 @@ source `.shrc` by `source .shrc`.
 While there are a number of installed support apps and libraries, the common
 apps include:
 
-- bat
-- btop
-- eza
-- fd
-- fzf
-- gdu
-- git
-- htop
-- jless
-- jq
-- neovim
-- node
-- pyenv
-- ripgrep (rg)
-- starship
-- tailscale
-- tldr
-- tmux
-- visidata
+- bat - better cat
+- btop - beautiful top
+- eza - better ls
+- fd - better find
+- fzf - awesome fuzzy finder
+- gdu - disk usage
+- git - version control
+- htop - better top
+- jless - json viewer
+- jq - json processor
+- neovim - improved vim
+- node - js interpreter
+- pyenv - python env manager
+- ripgrep (rg) - better grep
+- starship - better prompt
+- tailscale - vpn
+- tldr - better man
+- tmux - terminal multiplexer
+- visidata - csv editor and more
 
 ## vim and neovim
 
@@ -79,9 +79,10 @@ There is an alacritty config file as well but it may be out of date.
 
 The following are good and robust color schemes with nvim and wezterm support:
 
+- [Catpuccin](https://catppuccin.com/)
+- [Gruvbox](https://github.com/ellisonleao/gruvbox.nvim)
 - [Nord](https://www.nordtheme.com/ports/vim)
 - [Tokyo Night](https://github.com/folke/tokyonight.nvim)
-- [Gruvbox](https://github.com/ellisonleao/gruvbox.nvim)
 
 These even have good Obsidian theme support!
 

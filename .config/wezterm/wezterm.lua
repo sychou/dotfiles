@@ -46,12 +46,19 @@ local config = {
     font_size = 13.0,
     -- color_scheme = "GruvboxDark",
     -- color_scheme = "nord",
-    color_scheme = "tokyonight",
+    -- color_scheme = "tokyonight",
+    color_scheme = "Catppuccin Mocha", -- Mocha, Macchiato, Frappe, Latte
     initial_cols = 120,
     -- TODO Adjust this so it varies based on the size of the screen
     initial_rows = 45,
     window_background_opacity = 0.95,
     hide_tab_bar_if_only_one_tab = true,
+    window_padding = {
+        left = '1cell',
+        right = '1cell',
+        top = '0.5cell',
+        bottom = '0.5cell',
+    }
 }
 
 -- Set modifier keys based on OS

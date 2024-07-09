@@ -65,6 +65,7 @@ set updatetime=300
 set clipboard=unnamedplus
 
 set background=dark
+
 " Set a colorscheme
 "colorscheme lunaperche
 "colorscheme zaibatsu
@@ -73,3 +74,4 @@ set background=dark
 
 " Change the default mapleader
 let mapleader=" "
+
