@@ -27,25 +27,25 @@ source `.shrc` by `source .shrc`.
 While there are a number of installed support apps and libraries, the common
 apps include:
 
-bat
-btop
-eza
-fd
-fzf
-gdu
-git
-htop
-jless
-jq
-neovim
-node
-pyenv
-ripgrep (rg)
-starship
-tailscale
-tldr
-tmux
-visidata
+- bat
+- btop
+- eza
+- fd
+- fzf
+- gdu
+- git
+- htop
+- jless
+- jq
+- neovim
+- node
+- pyenv
+- ripgrep (rg)
+- starship
+- tailscale
+- tldr
+- tmux
+- visidata
 
 ## vim and neovim
 
@@ -54,6 +54,21 @@ haven't loaded up neovim for whatever reason.
 
 `.vimrc` contains basic vim config
 `./config/nvim/init.lua` references `.vimrc` but adds neovim specific plugins
+
+## tmux and neovim
+
+My tmux configuration relies on a few extras:
+
+- tpm (https://github.com/tmux-plugins/tpm)
+- catpuccin (https://github.com/catppuccin/tmux)
+- vim-tmux navigator (https://github.com/christoomey/vim-tmux-navigator)
+
+The bootstrap code should pull tpm but the plugins may need to be installed
+via <leader>I. 
+
+These plugins create a much better looking tmux, but more importantly,
+enable seamless pane navigation from tmux and neovim using <ctrl>-hjkl
+without any leader key required.
 
 ## wezterm and alacritty
 
