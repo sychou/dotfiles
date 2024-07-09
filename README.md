@@ -64,10 +64,10 @@ My tmux configuration relies on a few extras:
 - vim-tmux navigator (https://github.com/christoomey/vim-tmux-navigator)
 
 The bootstrap code should pull tpm but the plugins may need to be installed
-via <leader>I. 
+via `<leader>I`. 
 
 These plugins create a much better looking tmux, but more importantly,
-enable seamless pane navigation from tmux and neovim using <ctrl>-hjkl
+enable seamless pane navigation from tmux and neovim using `<ctrl>h/j/k/l`
 without any leader key required.
 
 ## wezterm and alacritty
