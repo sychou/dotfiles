@@ -82,6 +82,11 @@ local plugins = {
                 auto_install = true,
                 highlight = {
                     enable = true,
+                    disable = function(lang, buf)
+                        local disabled_filetypes = { "csv", "tsv" }
+                        local filetype = vim.bo[buf].filetype
+                        return vim.tbl_contains(disabled_filetypes, filetype)
+                    end,
                     additional_vim_regex_highlighting = false,
                 },
             }
@@ -133,19 +138,50 @@ local plugins = {
             }
         end
     },
-    -- Telescope Fuzzy finder
+    -- Telescope Fuzzy finder - https://github.com/nvim-telescope/telescope.nvim
     {
         "nvim-telescope/telescope.nvim",
         tag = '0.1.6',
         dependencies = { 'nvim-lua/plenary.nvim' }
     },
-    -- GitSigns
+    -- GitSigns - https://github.com/lewis6991/gitsigns.nvim
     {
         'lewis6991/gitsigns.nvim',
         config = function()
             require('gitsigns').setup()
         end
     },
+    -- nvim-surround - https://github.com/kylechui/nvim-surround
+    {
+        "kylechui/nvim-surround",
+        version = "*", -- Use for stability; omit to use `main` branch for the latest features
+        event = "VeryLazy",
+        config = function()
+            require("nvim-surround").setup({
+                -- Configuration here, or leave empty to use defaults
+            })
+        end
+    },
+    -- rainbow_csv - https://github.com/cameron-wags/rainbow_csv.nvim
+    {
+        'cameron-wags/rainbow_csv.nvim',
+        config = true,
+        ft = {
+            'csv',
+            'tsv',
+            'csv_semicolon',
+            'csv_whitespace',
+            'csv_pipe',
+            'rfc_csv',
+            'rfc_semicolon'
+        },
+        cmd = {
+            'RainbowDelim',
+            'RainbowDelimSimple',
+            'RainbowDelimQuoted',
+            'RainbowMultiDelim'
+        }
+    }
 }
 
 -- Initialize lazy.nvim
