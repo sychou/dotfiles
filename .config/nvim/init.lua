@@ -254,7 +254,66 @@ local plugins = {
             'RainbowDelimQuoted',
             'RainbowMultiDelim'
         }
-    }
+    },
+    -- whichkey - https://github.com/folke/which-key.nvim
+    {
+        "folke/which-key.nvim",
+        event = "VeryLazy",
+        init = function()
+            vim.o.timeout = true
+            vim.o.timeoutlen = 300
+        end,
+        config = function()
+            local wk = require("which-key")
+            wk.setup({
+                -- custom which-key setup
+            })
+
+            -- Register which-key mappings
+            wk.register({
+                f = {
+                    name = "Find",
+                    f = { "<cmd>Telescope find_files<CR>", "Find File" },
+                    g = { "<cmd>Telescope live_grep<CR>", "Live Grep" },
+                    b = { "<cmd>Telescope buffers<CR>", "Buffers" },
+                    h = { "<cmd>Telescope help_tags<CR>", "Help Tags" },
+                },
+                r = {
+                    name = "Run",
+                    p = { "<cmd>RunPython<CR>", "Run Python" },
+                },
+                h = {
+                    name = "Git Hunk",
+                    s = { "<cmd>Gitsigns stage_hunk<CR>", "Stage Hunk" },
+                    u = { "<cmd>Gitsigns undo_stage_hunk<CR>", "Undo Stage Hunk" },
+                    r = { "<cmd>Gitsigns reset_hunk<CR>", "Reset Hunk" },
+                    p = { "<cmd>Gitsigns preview_hunk<CR>", "Preview Hunk" },
+                    b = { "<cmd>Gitsigns blame_line<CR>", "Blame Line" },
+                },
+                ["["] = {
+                    c = { "<cmd>Gitsigns prev_hunk<CR>", "Previous Git Hunk" },
+                },
+                ["]"] = {
+                    c = { "<cmd>Gitsigns next_hunk<CR>", "Next Git Hunk" },
+                },
+                ["<space>"] = {
+                    name = "LSP",
+                    e = { vim.diagnostic.open_float, "Open Float" },
+                    q = { vim.diagnostic.setloclist, "Set Loclist" },
+                    w = {
+                        name = "Workspace",
+                        a = { vim.lsp.buf.add_workspace_folder, "Add Folder" },
+                        r = { vim.lsp.buf.remove_workspace_folder, "Remove Folder" },
+                        l = { function() print(vim.inspect(vim.lsp.buf.list_workspace_folders())) end, "List Folders" },
+                    },
+                    D = { vim.lsp.buf.type_definition, "Type Definition" },
+                    rn = { vim.lsp.buf.rename, "Rename" },
+                    ca = { vim.lsp.buf.code_action, "Code Action" },
+                    f = { function() vim.lsp.buf.format({ async = true }) end, "Format" },
+                },
+            }, { prefix = "<leader>" })
+        end
+    },
 }
 
 -- Initialize lazy.nvim
