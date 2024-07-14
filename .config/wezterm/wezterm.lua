@@ -23,13 +23,15 @@ local function center_window(window)
     local max_width = screen.width
     local max_height = screen.height
     local x = (max_width - window_width) / 2
-    local y = 0
+    -- local y = 0
+    local y = (max_height - window_height) / 2
     window:set_position(x, y)
 end
 
 -- Event handler for window creation
 wezterm.on("gui-startup", function()
     local tab, pane, window = mux.spawn_window {}
+    
     -- Linux using wayland doesn't allow for repositioning
     if not is_linux() then
         wezterm.sleep_ms(50)
@@ -69,7 +71,8 @@ local catppuccin = {
 
 -- Base configuration
 local config = {
-    font = wezterm.font("JetBrainsMono Nerd Font"),
+    -- font = wezterm.font("JetBrainsMono Nerd Font"),
+    font = wezterm.font("FiraCode Nerd Font Mono"),
     font_size = 13.0,
     color_scheme = "Catppuccin Mocha", -- Mocha, Macchiato, Frappe, Latte
     initial_cols = 120,
@@ -81,7 +84,7 @@ local config = {
         top = '0.5cell',
         bottom = '0.5cell',
     },
-    window_decorations = "RESIZE",
+    window_decorations = "TITLE|RESIZE",
 
     -- Tab bar configuration
     use_fancy_tab_bar = false,
@@ -113,6 +116,7 @@ local config = {
             },
         },
     },
+
 }
 
 -- Set modifier keys based on OS
