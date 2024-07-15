@@ -101,6 +101,29 @@ if command_exists pyenv; then
     eval "$(pyenv init -)"
 fi
 
+# Function to activate Python virtual environment
+pv() {
+    # Function to activate the virtual environment
+    activate_venv() {
+        echo "Activating virtual environment: $1"
+        source "$1/bin/activate"
+        echo "Virtual environment activated. Use 'deactivate' to exit."
+        which python
+        python --version
+    }
+
+    # Check for .venv directory
+    if [ -d ".venv" ]; then
+        activate_venv ".venv"
+    elif [ -d "venv" ]; then
+        activate_venv "venv"
+    else
+        echo "Error: No Python virtual environment found."
+        echo "Please create a virtual environment named '.venv' or 'venv' in the current directory."
+        return 1
+    fi
+}
+
 # Start SSH agent if not already running and if the SSH key exists
 if [ -z "$SSH_AUTH_SOCK" ]; then
     eval "$(ssh-agent -s)"
