@@ -3,7 +3,8 @@
 -- Theme configuration
 -- Set this variable to "catppuccin", "gruvbox", "nord", or "tokyonight" to change the theme
 -- Catpuccin also supports catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, catppuccin-mocha
-local chosen_theme = "catppuccin-mocha"
+-- local chosen_theme = "catppuccin-mocha"
+local chosen_theme = "tokyonight"
 
 -- Source .vimrc for backward compatibility
 vim.cmd('source ~/.vimrc')
@@ -25,10 +26,10 @@ vim.opt.rtp:prepend(lazypath)
 -- Plugin definitions
 local plugins = {
     -- Color schemes
-    {   
-        "catppuccin/nvim", 
-        name = "catppuccin", 
-        priority = 1000 
+    {
+        "catppuccin/nvim",
+        name = "catppuccin",
+        priority = 1000
     },
     {
         "ellisonleao/gruvbox.nvim",
@@ -64,10 +65,10 @@ local plugins = {
             "TmuxNavigatePrevious",
         },
         keys = {
-            { "<c-h>", "<cmd><C-U>TmuxNavigateLeft<cr>" },
-            { "<c-j>", "<cmd><C-U>TmuxNavigateDown<cr>" },
-            { "<c-k>", "<cmd><C-U>TmuxNavigateUp<cr>" },
-            { "<c-l>", "<cmd><C-U>TmuxNavigateRight<cr>" },
+            { "<c-h>",  "<cmd><C-U>TmuxNavigateLeft<cr>" },
+            { "<c-j>",  "<cmd><C-U>TmuxNavigateDown<cr>" },
+            { "<c-k>",  "<cmd><C-U>TmuxNavigateUp<cr>" },
+            { "<c-l>",  "<cmd><C-U>TmuxNavigateRight<cr>" },
             { "<c-\\>", "<cmd><C-U>TmuxNavigatePrevious<cr>" },
         },
     },
@@ -80,6 +81,7 @@ local plugins = {
                 ensure_installed = { "c", "lua", "vim", "python", "javascript", "html" },
                 sync_install = false,
                 auto_install = true,
+                ignore_install = {},
                 highlight = {
                     enable = true,
                     disable = function(lang, buf)
@@ -89,6 +91,7 @@ local plugins = {
                     end,
                     additional_vim_regex_highlighting = false,
                 },
+                modules = {},
             }
         end
     },
@@ -99,16 +102,32 @@ local plugins = {
             "hrsh7th/cmp-nvim-lsp",
             "williamboman/mason.nvim",
             "williamboman/mason-lspconfig.nvim",
+            "b0o/schemastore.nvim",
         },
         config = function()
             require("mason").setup()
             require("mason-lspconfig").setup({
-                ensure_installed = { "pyright", "ruff_lsp" }
+                ensure_installed = { "pyright", "ruff_lsp", "jsonls", "lua_ls" }
             })
 
             local lspconfig = require('lspconfig')
             local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
+            -- Function to set up formatting on save
+            local function setup_formatting(client, bufnr)
+                if client.supports_method("textDocument/formatting") then
+                    vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+                    vim.api.nvim_create_autocmd("BufWritePre", {
+                        group = augroup,
+                        buffer = bufnr,
+                        callback = function()
+                            vim.lsp.buf.format({ bufnr = bufnr })
+                        end,
+                    })
+                end
+            end
+
+            -- Python config
             lspconfig.pyright.setup({
                 capabilities = capabilities,
                 settings = {
@@ -130,32 +149,61 @@ local plugins = {
                     client.server_capabilities.documentRangeFormattingProvider = true
 
                     -- Set up formatting on save
-                    vim.api.nvim_create_autocmd("BufWritePre", {
-                        buffer = bufnr,
-                        callback = function()
-                            vim.lsp.buf.format({ async = false })
-                        end,
-                    })
-
-                    -- Set up keybindings
-                    local opts = { noremap = true, silent = true, buffer = bufnr }
-                    vim.keymap.set('n', '<space>f', function() vim.lsp.buf.format({ async = true }) end, opts)
+                    setup_formatting(client, bufnr)
                 end,
             })
 
-            -- Global mappings
-            vim.keymap.set('n', '<space>e', vim.diagnostic.open_float)
-            vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
-            vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
-            vim.keymap.set('n', '<space>q', vim.diagnostic.setloclist)
+            -- JSON configuration
+            lspconfig.jsonls.setup({
+                capabilities = capabilities,
+                settings = {
+                    json = {
+                        schemas = require('schemastore').json.schemas(),
+                        validate = { enable = true },
+                    }
+                },
+                on_attach = function(client, bufnr)
+                    setup_formatting(client, bufnr)
+                end,
+            })
+
+            -- Lua configuration
+            lspconfig.lua_ls.setup({
+                capabilities = capabilities,
+                settings = {
+                    Lua = {
+                        runtime = {
+                            version = 'LuaJIT',
+                        },
+                        diagnostics = {
+                            globals = { 'vim' },
+                        },
+                        workspace = {
+                            library = vim.api.nvim_get_runtime_file("", true),
+                            checkThirdParty = false,
+                        },
+                        telemetry = {
+                            enable = false,
+                        },
+                    },
+                },
+                on_attach = function(client, bufnr)
+                    setup_formatting(client, bufnr)
+                end,
+            })
 
             -- Use LspAttach autocommand to only map the following keys
             -- after the language server attaches to the current buffer
             vim.api.nvim_create_autocmd('LspAttach', {
                 group = vim.api.nvim_create_augroup('UserLspConfig', {}),
                 callback = function(ev)
+                    -- Enable completion triggered by <c-x><c-o>
+                    vim.bo[ev.buf].omnifunc = 'v:lua.vim.lsp.omnifunc'
+
+                    -- Buffer local mappings.
+                    -- See `:help vim.lsp.*` for documentation on any of the below functions
                     local opts = { buffer = ev.buf }
-                    vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+                    -- vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
                     vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
                     vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
                     vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
@@ -173,7 +221,7 @@ local plugins = {
             })
         end
     },
-    -- CMP Autocompletion  
+    -- CMP Autocompletion
     {
         "hrsh7th/nvim-cmp",
         dependencies = {
@@ -278,6 +326,21 @@ local plugins = {
                     b = { "<cmd>Telescope buffers<CR>", "Buffers" },
                     h = { "<cmd>Telescope help_tags<CR>", "Help Tags" },
                 },
+                l = {
+                    name = "LSP",
+                    f = { function() vim.lsp.buf.format({ async = true }) end, "Format" },
+                    e = { vim.diagnostic.open_float, "Open Float" },
+                    q = { vim.diagnostic.setloclist, "Set Loclist" },
+                    D = { vim.lsp.buf.type_definition, "Type Definition" },
+                    r = { vim.lsp.buf.rename, "Rename" },
+                    a = { vim.lsp.buf.code_action, "Code Action" },
+                    w = {
+                        name = "Workspace",
+                        a = { vim.lsp.buf.add_workspace_folder, "Add Folder" },
+                        r = { vim.lsp.buf.remove_workspace_folder, "Remove Folder" },
+                        l = { function() print(vim.inspect(vim.lsp.buf.list_workspace_folders())) end, "List Folders" },
+                    },
+                },
                 r = {
                     name = "Run",
                     p = { "<cmd>RunPython<CR>", "Run Python" },
@@ -296,22 +359,15 @@ local plugins = {
                 ["]"] = {
                     c = { "<cmd>Gitsigns next_hunk<CR>", "Next Git Hunk" },
                 },
-                ["<space>"] = {
-                    name = "LSP",
-                    e = { vim.diagnostic.open_float, "Open Float" },
-                    q = { vim.diagnostic.setloclist, "Set Loclist" },
-                    w = {
-                        name = "Workspace",
-                        a = { vim.lsp.buf.add_workspace_folder, "Add Folder" },
-                        r = { vim.lsp.buf.remove_workspace_folder, "Remove Folder" },
-                        l = { function() print(vim.inspect(vim.lsp.buf.list_workspace_folders())) end, "List Folders" },
-                    },
-                    D = { vim.lsp.buf.type_definition, "Type Definition" },
-                    rn = { vim.lsp.buf.rename, "Rename" },
-                    ca = { vim.lsp.buf.code_action, "Code Action" },
-                    f = { function() vim.lsp.buf.format({ async = true }) end, "Format" },
+                g = {
+                    name = "Go to",
+                    D = { vim.lsp.buf.declaration, "Declaration" },
+                    d = { vim.lsp.buf.definition, "Definition" },
+                    i = { vim.lsp.buf.implementation, "Implementation" },
+                    r = { vim.lsp.buf.references, "References" },
                 },
-            }, { prefix = "<leader>" })
+            }, { prefix = "<leader>"
+            })
         end
     },
 }
@@ -335,7 +391,7 @@ function _G.apply_theme(theme)
 
     -- Lualine setup
     require('lualine').setup {
-        options = { 
+        options = {
             theme = lualine_theme
         }
     }
@@ -347,29 +403,29 @@ apply_theme(chosen_theme)
 -- Create a user command for easier theme switching
 vim.api.nvim_create_user_command('Theme', function(opts)
     apply_theme(opts.args)
-end, { nargs = 1, complete = function()
-    return { "catppuccin", "gruvbox", "nord", "tokyonight" }
-end })
+end, {
+    nargs = 1,
+    complete = function()
+        return { "catppuccin", "gruvbox", "nord", "tokyonight" }
+    end
+})
 
 -- Python script runner setup
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = "python",
-  callback = function()
-    -- Set up a local key mapping for Python files
-    vim.api.nvim_buf_set_keymap(0, 'n', '<F5>', ':w<CR>:split<CR>:terminal python3 %<CR>', { noremap = true, silent = true })
-  end
+    pattern = "python",
+    callback = function()
+        -- Set up a local key mapping for Python files
+        vim.api.nvim_buf_set_keymap(0, 'n', '<F5>', ':w<CR>:split<CR>:terminal python3 %<CR>',
+            { noremap = true, silent = true })
+    end
 })
 
 -- Create a command to run Python scripts
 vim.api.nvim_create_user_command('RunPython', function()
-    vim.cmd('w') -- Save the file
-    vim.cmd('split') -- Split the window
+    vim.cmd('w')                  -- Save the file
+    vim.cmd('split')              -- Split the window
     vim.cmd('terminal python3 %') -- Run the current file in the terminal
 end, {})
-
--- Add a global keymap for running Python scripts
-vim.api.nvim_set_keymap('n', '<leader>rp', ':RunPython<CR>', { noremap = true, silent = true })
-
 
 -- Keymappings
 local function map(mode, lhs, rhs, opts)
@@ -378,18 +434,20 @@ local function map(mode, lhs, rhs, opts)
     vim.api.nvim_set_keymap(mode, lhs, rhs, options)
 end
 
--- Telescope keymappings
-map('n', '<leader>ff', ':Telescope find_files<CR>')
-map('n', '<leader>fg', ':Telescope live_grep<CR>')
-map('n', '<leader>fb', ':Telescope buffers<CR>')
-map('n', '<leader>fh', ':Telescope help_tags<CR>')
+-- Additional keymappings (if any are not covered by which-key)
+-- Add any additional keymappings here that are not included in the which-key configuration
 
--- Gitsigns keymappings
-map('n', ']c', '<cmd>Gitsigns next_hunk<CR>')
-map('n', '[c', '<cmd>Gitsigns prev_hunk<CR>')
-map('n', '<leader>hs', '<cmd>Gitsigns stage_hunk<CR>')
-map('n', '<leader>hu', '<cmd>Gitsigns undo_stage_hunk<CR>')
-map('n', '<leader>hr', '<cmd>Gitsigns reset_hunk<CR>')
-map('n', '<leader>hp', '<cmd>Gitsigns preview_hunk<CR>')
-map('n', '<leader>hb', '<cmd>Gitsigns blame_line<CR>')
+-- Note: The following keymappings are now handled by which-key and can be removed:
+-- map('n', '<leader>ff', ':Telescope find_files<CR>')
+-- map('n', '<leader>fg', ':Telescope live_grep<CR>')
+-- map('n', '<leader>fb', ':Telescope buffers<CR>')
+-- map('n', '<leader>fh', ':Telescope help_tags<CR>')
+-- map('n', ']c', '<cmd>Gitsigns next_hunk<CR>')
+-- map('n', '[c', '<cmd>Gitsigns prev_hunk<CR>')
+-- map('n', '<leader>hs', '<cmd>Gitsigns stage_hunk<CR>')
+-- map('n', '<leader>hu', '<cmd>Gitsigns undo_stage_hunk<CR>')
+-- map('n', '<leader>hr', '<cmd>Gitsigns reset_hunk<CR>')
+-- map('n', '<leader>hp', '<cmd>Gitsigns preview_hunk<CR>')
+-- map('n', '<leader>hb', '<cmd>Gitsigns blame_line<CR>')
 
+-- End of init.lua
