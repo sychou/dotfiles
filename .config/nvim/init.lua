@@ -21,7 +21,7 @@ vim.cmd('source ~/.vimrc')
 
 -- Lazy package manager setup
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not (vim.uv or vim.loop).fs_stat(lazypath) then
+if not vim.loop.fs_stat(lazypath) then
     vim.fn.system({
         "git",
         "clone",
@@ -57,6 +57,11 @@ local plugins = {
     {
         "folke/tokyonight.nvim",
         priority = 1000,
+        opts = {},
+    },
+    -- Dressing - https://github.com/stevearc/dressing.nvim
+    {
+        'stevearc/dressing.nvim',
         opts = {},
     },
     -- Lualine - https://github.com/nvim-lualine/lualine.nvim
@@ -120,12 +125,37 @@ local plugins = {
                 ensure_installed = { "pyright", "ruff_lsp", "jsonls", "lua_ls" }
             })
 
+            -- Configure LSP diagnostic signs
+            vim.fn.sign_define("DiagnosticSignError", { text = "✗", texthl = "DiagnosticSignError" })
+            vim.fn.sign_define("DiagnosticSignWarn", { text = "⚠", texthl = "DiagnosticSignWarn" })
+            vim.fn.sign_define("DiagnosticSignInfo", { text = "ℹ", texthl = "DiagnosticSignInfo" })
+            vim.fn.sign_define("DiagnosticSignHint", { text = "➤", texthl = "DiagnosticSignHint" })
+
+            -- Configure diagnostic display
+            vim.diagnostic.config({
+                virtual_text = true,
+                signs = true,
+                underline = true,
+                update_in_insert = false,
+                severity_sort = true,
+            })
+
+            -- Show diagnostic message on cursor hover
+            vim.o.updatetime = 250
+            vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
+                group = vim.api.nvim_create_augroup("float_diagnostic", { clear = true }),
+                callback = function()
+                    vim.diagnostic.open_float(nil, { focus = false })
+                end
+            })
+
             local lspconfig = require('lspconfig')
             local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
             -- Function to set up formatting on save
             local function setup_formatting(client, bufnr)
                 if client.supports_method("textDocument/formatting") then
+                    local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
                     vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
                     vim.api.nvim_create_autocmd("BufWritePre", {
                         group = augroup,
@@ -235,6 +265,8 @@ local plugins = {
                 mapping = {
                     ['<C-d>'] = cmp.mapping.scroll_docs(-4),
                     ['<C-f>'] = cmp.mapping.scroll_docs(4),
+                    ['<C-j>'] = cmp.mapping.select_next_item(),
+                    ['<C-k>'] = cmp.mapping.select_prev_item(),
                     ['<C-l>'] = cmp.mapping.complete(),
                     ['<C-e>'] = cmp.mapping.close(),
                     ['<CR>'] = cmp.mapping.confirm({
@@ -433,5 +465,11 @@ vim.api.nvim_create_user_command('RunPython', function()
     vim.cmd('split')              -- Split the window
     vim.cmd('terminal python3 %') -- Run the current file in the terminal
 end, {})
+
+-- Remap Ctrl-N to Ctrl-J and Ctrl-P to Ctrl-K in command-line mode
+vim.cmd([[
+  cnoremap <C-J> <C-N>
+  cnoremap <C-K> <C-P>
+]])
 
 -- End of init.lua
