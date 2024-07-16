@@ -1,10 +1,20 @@
 -- init.lua
 
 -- Theme configuration
--- Set this variable to "catppuccin", "gruvbox", "nord", or "tokyonight" to change the theme
--- Catpuccin also supports catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, catppuccin-mocha
--- local chosen_theme = "catppuccin-mocha"
-local chosen_theme = "tokyonight"
+-- Supported themes:
+--     catppuccin
+--     catppuccin-latte
+--     catppuccin-frappe
+--     catppuccin-macchiato
+--     catppuccin-mocha
+--     gruvbox
+--     nord
+--     tokyonight
+--     tokyonight-night
+--     tokyonight-storm
+--     tokyonight-day
+--     tokyonight-moon
+local chosen_theme = "tokyonight-night"
 
 -- Source .vimrc for backward compatibility
 vim.cmd('source ~/.vimrc')
@@ -49,12 +59,12 @@ local plugins = {
         priority = 1000,
         opts = {},
     },
-    -- Lualine
+    -- Lualine - https://github.com/nvim-lualine/lualine.nvim
     {
         'nvim-lualine/lualine.nvim',
         dependencies = { 'kyazdani42/nvim-web-devicons', opt = true }
     },
-    -- vim-tmux-navigator
+    -- vim-tmux-navigator - https://github.com/christoomey/vim-tmux-navigator
     {
         "christoomey/vim-tmux-navigator",
         cmd = {
@@ -72,7 +82,7 @@ local plugins = {
             { "<c-\\>", "<cmd><C-U>TmuxNavigatePrevious<cr>" },
         },
     },
-    -- Treesitter
+    -- Treesitter - https://github.com/nvim-treesitter/nvim-treesitter
     {
         "nvim-treesitter/nvim-treesitter",
         build = ":TSUpdate",
@@ -95,7 +105,7 @@ local plugins = {
             }
         end
     },
-    -- LSP
+    -- LSP - https://github.com/neovim/nvim-lspconfig
     {
         "neovim/nvim-lspconfig",
         dependencies = {
@@ -199,29 +209,11 @@ local plugins = {
                 callback = function(ev)
                     -- Enable completion triggered by <c-x><c-o>
                     vim.bo[ev.buf].omnifunc = 'v:lua.vim.lsp.omnifunc'
-
-                    -- Buffer local mappings.
-                    -- See `:help vim.lsp.*` for documentation on any of the below functions
-                    local opts = { buffer = ev.buf }
-                    -- vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-                    -- vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
-                    -- vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
-                    -- vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
-                    -- vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
-                    -- vim.keymap.set('n', '<space>wa', vim.lsp.buf.add_workspace_folder, opts)
-                    -- vim.keymap.set('n', '<space>wr', vim.lsp.buf.remove_workspace_folder, opts)
-                    -- vim.keymap.set('n', '<space>wl', function()
-                    --     print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-                    -- end, opts)
-                    -- vim.keymap.set('n', '<space>D', vim.lsp.buf.type_definition, opts)
-                    -- vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, opts)
-                    -- vim.keymap.set({ 'n', 'v' }, '<space>ca', vim.lsp.buf.code_action, opts)
-                    -- -- vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
                 end,
             })
         end
     },
-    -- CMP Autocompletion
+    -- CMP - completion engine - https://github.com/hrsh7th/nvim-cmp
     {
         "hrsh7th/nvim-cmp",
         dependencies = {
@@ -357,31 +349,22 @@ local plugins = {
                 ["]"] = {
                     c = { "<cmd>Gitsigns next_hunk<CR>", "Next Git Hunk" },
                 },
-                -- g = {
-                --     name = "Go to",
-                --     D = { vim.lsp.buf.declaration, "Declaration" },
-                --     d = { vim.lsp.buf.definition, "Definition" },
-                --     i = { vim.lsp.buf.implementation, "Implementation" },
-                --     r = { vim.lsp.buf.references, "References" },
-                -- },
             }, { prefix = "<leader>" })
 
             -- Non-leader keymaps
             wk.register({
                 gD = { vim.lsp.buf.declaration, "Go to Declaration" },
                 gd = { vim.lsp.buf.definition, "Go to Definition" },
-                K = { vim.lsp.buf.hover, "Hover Information" },
                 gi = { vim.lsp.buf.implementation, "Go to Implementation" },
+                gr = { vim.lsp.buf.references, "References" },
+                K = { vim.lsp.buf.hover, "Hover Information" },
                 ["<C-k>"] = { vim.lsp.buf.signature_help, "Signature Help" },
                 ["[d"] = { vim.diagnostic.goto_prev, "Previous Diagnostic" },
                 ["]d"] = { vim.diagnostic.goto_next, "Next Diagnostic" },
-                gr = { vim.lsp.buf.references, "References" },
             })
         end
     },
 }
-
-
 
 -- Initialize lazy.nvim
 require("lazy").setup(plugins, {})
@@ -393,10 +376,10 @@ function _G.apply_theme(theme)
     local colorscheme = theme
     local lualine_theme = theme
 
-    if theme == "tokyonight" then
-        colorscheme = "tokyonight-night"
-        -- lualine_theme remains "tokyonight"
-    end
+    -- if theme == "tokyonight" then
+    --     colorscheme = "tokyonight-night"
+    --     -- lualine_theme remains "tokyonight"
+    -- end
 
     vim.cmd("colorscheme " .. colorscheme)
 
@@ -417,7 +400,20 @@ vim.api.nvim_create_user_command('Theme', function(opts)
 end, {
     nargs = 1,
     complete = function()
-        return { "catppuccin", "gruvbox", "nord", "tokyonight" }
+        return {
+            "catppuccin",
+            "catppuccin-latte",
+            "catppuccin-frappe",
+            "catppuccin-macchiato",
+            "catppuccin-mocha",
+            "gruvbox",
+            "nord",
+            "tokyonight",
+            "tokyonight-night",
+            "tokyonight-storm",
+            "tokyonight-day",
+            "tokyonight-moon",
+        }
     end
 })
 
@@ -437,28 +433,5 @@ vim.api.nvim_create_user_command('RunPython', function()
     vim.cmd('split')              -- Split the window
     vim.cmd('terminal python3 %') -- Run the current file in the terminal
 end, {})
-
--- Keymappings
-local function map(mode, lhs, rhs, opts)
-    local options = { noremap = true, silent = true }
-    if opts then options = vim.tbl_extend('force', options, opts) end
-    vim.api.nvim_set_keymap(mode, lhs, rhs, options)
-end
-
--- Additional keymappings (if any are not covered by which-key)
--- Add any additional keymappings here that are not included in the which-key configuration
-
--- Note: The following keymappings are now handled by which-key and can be removed:
--- map('n', '<leader>ff', ':Telescope find_files<CR>')
--- map('n', '<leader>fg', ':Telescope live_grep<CR>')
--- map('n', '<leader>fb', ':Telescope buffers<CR>')
--- map('n', '<leader>fh', ':Telescope help_tags<CR>')
--- map('n', ']c', '<cmd>Gitsigns next_hunk<CR>')
--- map('n', '[c', '<cmd>Gitsigns prev_hunk<CR>')
--- map('n', '<leader>hs', '<cmd>Gitsigns stage_hunk<CR>')
--- map('n', '<leader>hu', '<cmd>Gitsigns undo_stage_hunk<CR>')
--- map('n', '<leader>hr', '<cmd>Gitsigns reset_hunk<CR>')
--- map('n', '<leader>hp', '<cmd>Gitsigns preview_hunk<CR>')
--- map('n', '<leader>hb', '<cmd>Gitsigns blame_line<CR>')
 
 -- End of init.lua
