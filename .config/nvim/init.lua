@@ -204,19 +204,19 @@ local plugins = {
                     -- See `:help vim.lsp.*` for documentation on any of the below functions
                     local opts = { buffer = ev.buf }
                     -- vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-                    vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
-                    vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
-                    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
-                    vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
-                    vim.keymap.set('n', '<space>wa', vim.lsp.buf.add_workspace_folder, opts)
-                    vim.keymap.set('n', '<space>wr', vim.lsp.buf.remove_workspace_folder, opts)
-                    vim.keymap.set('n', '<space>wl', function()
-                        print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-                    end, opts)
-                    vim.keymap.set('n', '<space>D', vim.lsp.buf.type_definition, opts)
-                    vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, opts)
-                    vim.keymap.set({ 'n', 'v' }, '<space>ca', vim.lsp.buf.code_action, opts)
-                    vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+                    -- vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+                    -- vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+                    -- vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
+                    -- vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
+                    -- vim.keymap.set('n', '<space>wa', vim.lsp.buf.add_workspace_folder, opts)
+                    -- vim.keymap.set('n', '<space>wr', vim.lsp.buf.remove_workspace_folder, opts)
+                    -- vim.keymap.set('n', '<space>wl', function()
+                    --     print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+                    -- end, opts)
+                    -- vim.keymap.set('n', '<space>D', vim.lsp.buf.type_definition, opts)
+                    -- vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, opts)
+                    -- vim.keymap.set({ 'n', 'v' }, '<space>ca', vim.lsp.buf.code_action, opts)
+                    -- -- vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
                 end,
             })
         end
@@ -316,8 +316,6 @@ local plugins = {
             wk.setup({
                 -- custom which-key setup
             })
-
-            -- Register which-key mappings
             wk.register({
                 f = {
                     name = "Find",
@@ -359,18 +357,31 @@ local plugins = {
                 ["]"] = {
                     c = { "<cmd>Gitsigns next_hunk<CR>", "Next Git Hunk" },
                 },
-                g = {
-                    name = "Go to",
-                    D = { vim.lsp.buf.declaration, "Declaration" },
-                    d = { vim.lsp.buf.definition, "Definition" },
-                    i = { vim.lsp.buf.implementation, "Implementation" },
-                    r = { vim.lsp.buf.references, "References" },
-                },
-            }, { prefix = "<leader>"
+                -- g = {
+                --     name = "Go to",
+                --     D = { vim.lsp.buf.declaration, "Declaration" },
+                --     d = { vim.lsp.buf.definition, "Definition" },
+                --     i = { vim.lsp.buf.implementation, "Implementation" },
+                --     r = { vim.lsp.buf.references, "References" },
+                -- },
+            }, { prefix = "<leader>" })
+
+            -- Non-leader keymaps
+            wk.register({
+                gD = { vim.lsp.buf.declaration, "Go to Declaration" },
+                gd = { vim.lsp.buf.definition, "Go to Definition" },
+                K = { vim.lsp.buf.hover, "Hover Information" },
+                gi = { vim.lsp.buf.implementation, "Go to Implementation" },
+                ["<C-k>"] = { vim.lsp.buf.signature_help, "Signature Help" },
+                ["[d"] = { vim.diagnostic.goto_prev, "Previous Diagnostic" },
+                ["]d"] = { vim.diagnostic.goto_next, "Next Diagnostic" },
+                gr = { vim.lsp.buf.references, "References" },
             })
         end
     },
 }
+
+
 
 -- Initialize lazy.nvim
 require("lazy").setup(plugins, {})
