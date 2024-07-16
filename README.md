@@ -55,6 +55,21 @@ haven't loaded up neovim for whatever reason.
 `.vimrc` contains basic vim config
 `./config/nvim/init.lua` references `.vimrc` but adds neovim specific plugins
 
+My neovim init.lua has a number of plugins all managed by lazy.nvim:
+
+- various color schemes
+- lualine
+- vim-tmux-navigator
+- treesitter
+- lsp (configured for python, lua, and json)
+- cmp autocompletion
+- which-key
+- telescope
+- gitsigns
+- nvim-surround
+- rainbow_csv
+- dressing
+
 ## tmux and neovim
 
 My tmux configuration relies on a few extras:
