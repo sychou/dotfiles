@@ -1,4 +1,4 @@
-import = ["~/.config/alacritty/catppuccin-theme.toml"]
+# import = ["~/.config/alacritty/catppuccin-theme.toml"]
 
 [env]
 TERM = "xterm-256color"
@@ -6,8 +6,8 @@ TERM = "xterm-256color"
 [window]
 # dimensions = { columns = 120, lines = 60 }
 # position = { x = 100, y = 0 }
-padding = { x = 6, y = 0}
-dynamic_padding = false
+padding = { x = 6, y = 6}
+dynamic_padding = true
 decorations = "Full" # Full or None
 opacity = 0.9
 blur = true
