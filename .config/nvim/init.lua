@@ -458,40 +458,6 @@ vim.api.nvim_create_autocmd("FileType", {
     end
 })
 
--- Netrw keymappings (dupe from .vimrc for which-key menu)
---[[
-local wk = require("which-key")
-
-vim.api.nvim_create_autocmd("FileType", {
-    pattern = "netrw",
-    callback = function()
-        wk.register({
-            ["<Leader>"] = {
-                d = { "<cmd>Lexplore<CR>", "Close netrw" },
-                b = {
-                    name = "Bookmark",
-                    b = { "mb", "Create bookmark" },
-                    d = { "mB", "Remove most recent bookmark" },
-                    l = { "gb", "Jump to most recent bookmark" },
-                },
-            },
-            f = {
-                name = "File",
-                f = { "%:w<CR><cmd>buffer #<CR>", "Create file" },
-                e = { "R", "Rename file" },
-                c = { "mc", "Copy marked files" },
-                C = { "mtmc", "Mark, move cursor, and copy" },
-                x = { "mm", "Move marked files" },
-                X = { "mtmm", "Same as fC but for moving files" },
-                [";"] = { "mx", "Run commands on marked files" },
-                l = { "<cmd>echo join(netrw#Expose('netrwmarkfilelist'), '\n')<CR>",
-                    "Show list of all marked files" },
-            },
-        }, { buffer = 0 }) -- This ensures the mappings only apply to the current (netrw) buffer
-    end
-})
-]] --
-
 -- Create a command to run Python scripts
 vim.api.nvim_create_user_command('RunPython', function()
     vim.cmd('w')                  -- Save the file
