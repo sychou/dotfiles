@@ -26,9 +26,8 @@ if command_exists eza; then
     alias ls='eza --hyperlink -s extension'
     alias la='ls -a'
     alias ll='ls -l --no-quotes'
-    alias lla='ll -a'
-    alias llg='ll --git'
-    alias llc='ll -s created'
+    alias lla='ll -a --git'
+    alias llc='lla -s created'
 else
     echo "eza not installed - https://eza.rocks"
     alias ls='ls --color=auto -F --hyperlink'
