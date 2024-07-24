@@ -33,3 +33,8 @@ fi
 if command_exists starship; then
     eval "$(starship init bash)"
 fi
+
+# mise
+if command_exists mise; then
+    eval "$(mise activate bash)"
+fi

@@ -37,3 +37,7 @@ if command_exists starship; then
     eval "$(starship init zsh)"
 fi
 
+# mise
+if command_exists mise; then
+    eval "$(mise activate zsh)"
+fi

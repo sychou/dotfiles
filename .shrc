@@ -90,18 +90,18 @@ fi
 
 
 # pyenv
-if [ -d "$HOME/.pyenv/bin" ]; then
-    PATH="$HOME/.pyenv/bin:$PATH"
-fi
-if command_exists pyenv; then
-    export PYENV_ROOT="$HOME/.pyenv"
-    PATH="$PYENV_ROOT/shims:$PATH"
-    export PATH
-    eval "$(pyenv init -)"
-fi
+# if [ -d "$HOME/.pyenv/bin" ]; then
+#     PATH="$HOME/.pyenv/bin:$PATH"
+# fi
+# if command_exists pyenv; then
+#     export PYENV_ROOT="$HOME/.pyenv"
+#     PATH="$PYENV_ROOT/shims:$PATH"
+#     export PATH
+#     eval "$(pyenv init -)"
+# fi
 
 # Function to activate Python virtual environment
-pv() {
+venv() {
     # Function to activate the virtual environment
     activate_venv() {
         echo "Activating virtual environment: $1"
@@ -128,5 +128,8 @@ if [ -z "$SSH_AUTH_SOCK" ]; then
     eval "$(ssh-agent -s)"
     if [ -f "$HOME/.ssh/id_rsa" ]; then
         ssh-add "$HOME/.ssh/id_rsa"
+    fi
+    if [ -f "$HOME/.ssh/id_rsa_llanero" ]; then
+        ssh-add "$HOME/.ssh/id_rsa_llanero"
     fi
 fi

@@ -26,5 +26,7 @@ fi
 # KEYS
 if [[ -f "$HOME/.keys" ]]; then
     . "$HOME/.keys"
+else
+    echo "No .keys were found."
 fi
 

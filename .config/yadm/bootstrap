@@ -6,18 +6,52 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to detect if the system is macOS
+is_mac() {
+    [[ "$(uname)" == "Darwin" ]]
+}
+
+# Function to detect if the system is Linux
+is_linux() {
+    [[ "$(uname)" == "Linux" ]]
+}
+
+# Function to detect macOS on Intel
+is_mac_intel() {
+    is_mac && [[ "$(uname -m)" == "x86_64" ]]
+}
+
+# Function to detect macOS on Apple Silicon
+is_mac_apple_silicon() {
+    is_mac && [[ "$(uname -m)" == "arm64" ]]
+}
+
+# Function to detect Linux on x86_64
+is_linux_x86_64() {
+    is_linux && [[ "$(uname -m)" == "x86_64" ]]
+}
+
+# Function to detect Linux on arm64
+is_linux_arm64() {
+    is_linux && [[ "$(uname -m)" == "aarch64" ]]
+}
+
 # Function to install a font (for ubuntu)
 install_font() {
     FONT_DIR="/usr/local/share/fonts"
-    echo "[BOOTSTRAP] Installing font: $1"
-    mkdir -p "$HOME/tmp"
-    curl -L -o "$HOME/tmp/$1.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/$1.zip"
-    sudo unzip "$HOME/tmp/$1.zip" -d "$FONT_DIR"
-    rm "$HOME/tmp/$1.zip"
+    if [ ! -f "$FONT_DIR/$1-Regular.ttf" ]; then
+        echo "[BOOTSTRAP] Installing font: $1"
+        mkdir -p "$HOME/tmp"
+        curl -L -o "$HOME/tmp/$1.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/$1.zip"
+        sudo unzip "$HOME/tmp/$1.zip" -d "$FONT_DIR"
+        rm "$HOME/tmp/$1.zip"
+    else
+        echo "[BOOTSTRAP] Font $1 already installed"
+    fi
 }
 
 # Check for the operating system
-if [[ "$(uname)" == "Darwin" ]]; then
+if is_mac; then
     echo "[BOOTSTRAP] macOS detected."
 
     # Check for Xcode CLI tools and install if not present
@@ -28,12 +62,16 @@ if [[ "$(uname)" == "Darwin" ]]; then
         until xcode-select -p &> /dev/null; do
             sleep 5
         done
+    else
+        echo "[BOOTSTRAP] Xcode Command Line Tools already installed"
     fi
 
     # Install Homebrew if needed
     if ! command_exists brew; then
         echo "[BOOTSTRAP] Installing Homebrew"
         bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    else
+        echo "[BOOTSTRAP] Homebrew already installed"
     fi
     
     # Install brew packages
@@ -42,7 +80,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
         brew update
         brew install \
             bat \
-            btop \
             eza \
             fd \
             fzf \
@@ -51,26 +88,27 @@ if [[ "$(uname)" == "Darwin" ]]; then
             htop \
             jless \
             jq \
-            libb2 \
+            lua \
             luarocks \
+            mise \
             neovim \
-            node \
-            pyenv \
+            openssl \
+            pipx \
             ripgrep \
             starship \
-            tldr \
-            tmux \
-            visidata
+            tmux
 
         # Install fonts
-        echo "[BOOTSTRAP] Installing fonts"
-        brew tap homebrew/cask-fonts
+        echo "[BOOTSTRAP] Installing fonts in casks"
+        # brew tap homebrew/cask-fonts
         brew install --cask \
             font-fira-code-nerd-font \
             font-jetbrains-mono-nerd-font
 
-        echo "[BOOTSTRAP] Installing casks"
+        echo "[BOOTSTRAP] Installing GUI apps in casks"
         brew install --cask \
+            1password-cli \
+            alacritty \
             tailscale \
             wezterm
 
@@ -79,14 +117,13 @@ if [[ "$(uname)" == "Darwin" ]]; then
         exit 1
     fi
 
-elif command_exists apt; then
+elif is_linux && command_exists apt; then
     echo "[BOOTSTRAP] Apt-based system detected (Ubuntu optimized). Using apt."
 
     # Install apt packages
     sudo apt update
     sudo apt install -y \
         bat \
-        btop \
         curl \
         eza \
         fd-find \
@@ -96,66 +133,13 @@ elif command_exists apt; then
         gpg \
         htop \
         jq \
+        lua \
         luarocks \
         neovim \
+        pipx \
         ripgrep \
         tailscale \
-        visidata
-
-    # Install pyenv
-    if ! command_exists pyenv; then
-        echo "[BOOTSTRAP] Installing pyenv"
-        sudo apt install -y \
-            build-essential \
-            libssl-dev \
-            zlib1g-dev \
-            libbz2-dev \
-            libreadline-dev \
-            libsqlite3-dev \
-            libncursesw5-dev \
-            xz-utils \
-            tk-dev \
-            libxml2-dev \
-            libxmlsec1-dev \
-            libffi-dev \
-            liblzma-dev
-        curl https://pyenv.run | bash
-    fi
-
-    # Install tldr
-    pip install tldr
-    tldr -u
-
-    # Install node
-    if ! command_exists node; then
-        echo "[BOOTSTRAP] Installing node"
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-        nvm install 20
-    fi
-
-    # Install jless
-    if ! command_exists jless; then
-        echo "[BOOTSTRAP] Installing jless"
-        mkdir -p $HOME/tmp $HOME/bin
-        curl -L -o $HOME/tmp/jless.zip https://github.com/PaulJuliusMartinez/jless/releases/download/v0.9.0/jless-v0.9.0-x86_64-unknown-linux-gnu.zip
-        unzip $HOME/tmp/jless.zip -d $HOME/bin
-        rm $HOME/tmp/jless.zip
-    fi
-
-    # Install fzf
-    if ! command_exists fzf; then
-        echo "[BOOTSTRAP] Installing fzf"
-        git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
-        ~/.fzf/install
-    fi
-
-    # Install Starship
-    if ! command_exists starship; then
-        echo "[BOOTSTRAP] Installing Starship"
-        curl -sS https://starship.rs/install.sh | sh
-    fi
+        tmux
 
     # Check for GUI
     if xset q &>/dev/null; then
@@ -181,18 +165,75 @@ elif command_exists apt; then
         echo "  - raindrop extension"
     fi
 else
-    echo "[BOOTSTRAP] Neither Homebrew nor APT detected. Please install one of them first."
+    echo "[BOOTSTRAP] Neither macOS nor APT-based Linux detected. Please install one of them first."
     exit 1
 fi
 
 # Common Setup
 
-# Set up pyenv and install Python 3.11.9
-echo "[BOOTSTRAP] Setting up pyenv and installing Python 3.11.9"
-export PATH="$HOME/.pyenv/bin:$PATH"
-eval "$(pyenv init -)"
-pyenv install 3.11.9
-pyenv global 3.11.9
+# Install mise
+if ! command_exists mise; then
+    if is_mac; then
+        echo "[BOOTSTRAP] Installing mise for Mac"
+        brew install mise
+    elif is_linux; then
+        echo "[BOOTSTRAP] Installing mise for Linux"
+        mkdir -p ~/bin
+        if is_linux_x86_64; then
+            echo "[BOOTSTRAP] Downloading mise for Linux x64"
+            curl -fsSL https://mise.jdx.dev/mise-latest-linux-x64 > ~/bin/mise
+        elif is_linux_arm64; then
+            echo "[BOOTSTRAP] Downloading mise for Linux arm64"
+            curl -fsSL https://mise.jdx.dev/mise-latest-linux-arm64 > ~/bin/mise
+        else
+            echo "[BOOTSTRAP] ERROR - Unsupported Linux architecture for mise installation"
+            exit 1
+        fi
+        chmod +x ~/bin/mise
+        mise self-update
+        
+   else
+        echo "[BOOTSTRAP] ERROR - Cannot install mise. Unsupported system."
+        exit 1
+    fi
+else
+    echo "[BOOTSTRAP] mise already installed"
+fi
+
+if command_exists mise; then
+    # Set up python with mise
+    echo "[BOOTSTRAP] Setting up python with mise"
+    mise use --global python@3.11.9
+
+    if is_linux; then
+        # Install additional packages with mise on Linux only
+        echo "[BOOTSTRAP] Installing additional packages with mise"
+        mise use --global jless@latest
+        mise use --global starship@latest
+        mise use --global fzf@latest
+
+        # Activate the installed tools
+        # mise activate
+    fi
+else
+    echo "[BOOTSTRAP] ERROR - mise installation failed"
+    exit 1
+fi
+
+if command_exists pipx; then
+    # Install Python apps
+    echo "[BOOTSTRAP] Installing Python apps with pipx"
+    pipx install \
+        tldr \
+        ruff \
+        httpie \
+        pytube \
+        llm \
+        visidata
+else
+    echo "[BOOTSTRAP] ERROR - pipx is missing"
+fi
+
 
 # Clone tpm if not already present
 if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
