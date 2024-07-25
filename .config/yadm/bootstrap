@@ -133,7 +133,7 @@ elif is_linux && command_exists apt; then
         gpg \
         htop \
         jq \
-        lua \
+        lua5.4 \
         luarocks \
         neovim \
         pipx \
