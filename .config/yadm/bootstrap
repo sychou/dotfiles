@@ -150,17 +150,47 @@ elif is_linux && command_exists apt; then
         install_font "FiraCode"
         install_font "JetBrainsMono"
 
-        # Install WezTerm
-        if ! command_exists wezterm; then
-            echo "[BOOTSTRAP] Installing WezTerm"
-            curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
-            echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list
-            sudo apt update
-            sudo apt install -y wezterm
+        # Install Snap and Snap packages
+        if ! command_exists snap; then
+            echo "[BOOTSTRAP] Installing Snap"
+            sudo apt install -y snapd
+            sudo snap install core
         fi
 
+        # Install Snap packages
+        echo "[BOOTSTRAP] Installing Snap packages"
+        sudo snap install alacritty --classic
+        sudo snap install brave
+        sudo snap install 1password
+        sudo snap install obsidian
+
+        # Install WezTerm
+        # if ! command_exists wezterm; then
+        #     echo "[BOOTSTRAP] Installing WezTerm"
+        #     curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
+        #     echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list
+        #     sudo apt update
+        #     sudo apt install -y wezterm
+        # else
+        #     echo "[BOOTSTRAP] WezTerm already installed"
+        # fi
+
+        # Install kitty
+        # if ! command_exists kitty; then
+        #     echo "[BOOTSTRAP] Installing Kitty"
+        #     curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
+        #     # Add Kitty to PATH
+        #     mkdir -p ~/.local/bin
+        #     ln -s ~/.local/kitty.app/bin/kitty ~/.local/bin/
+        #     # Create desktop shortcut
+        #     cp ~/.local/kitty.app/share/applications/kitty.desktop ~/.local/share/applications/
+        #     sed -i "s|Icon=kitty|Icon=/home/$USER/.local/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g" ~/.local/share/applications/kitty.desktop
+        # else
+        #     echo "[BOOTSTRAP] Kitty already installed"
+        # fi
+        # curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
+
         echo "[BOOTSTRAP] Manually install:"
-        echo "  - brave browser"
         echo "  - 1password extension"
         echo "  - raindrop extension"
     fi
@@ -202,19 +232,10 @@ fi
 
 if command_exists mise; then
     # Set up python with mise
-    echo "[BOOTSTRAP] Setting up python with mise"
+    echo "[BOOTSTRAP] Setting up python and node with mise"
     mise use --global python@3.11.9
+    mise use --global node@latest
 
-    if is_linux; then
-        # Install additional packages with mise on Linux only
-        echo "[BOOTSTRAP] Installing additional packages with mise"
-        mise use --global jless@latest
-        mise use --global starship@latest
-        mise use --global fzf@latest
-
-        # Activate the installed tools
-        # mise activate
-    fi
 else
     echo "[BOOTSTRAP] ERROR - mise installation failed"
     exit 1
@@ -227,11 +248,46 @@ if command_exists pipx; then
         tldr \
         ruff \
         httpie \
+        pyright \
         pytube \
         llm \
         visidata
 else
     echo "[BOOTSTRAP] ERROR - pipx is missing"
+fi
+
+# Manually install some things under Linux
+if is_linux; then
+    echo "[BOOTSTRAP] Installing apps manually under Linux"
+
+    # jless
+    if ! command_exists jless; then
+        echo "[BOOTSTRAP] Installing jless"
+        mkdir -p $HOME/tmp $HOME/bin
+        curl -L -o $HOME/tmp/jless.zip https://github.com/PaulJuliusMartinez/jless/releases/download/v0.9.0/jless-v0.9.0-x86_64-unknown-linux-gnu.zip
+        unzip $HOME/tmp/jless.zip -d $HOME/bin
+        rm $HOME/tmp/jless.zip
+    else
+        echo "[BOOTSTRAP] jless already installed"
+    fi
+
+    # fzf
+    if ! command_exists fzf; then
+        echo "[BOOTSTRAP] Installing fzf"
+        git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+        ~/.fzf/install
+    else
+        echo "[BOOTSTRAP] fzf is already installed."
+    fi
+
+    # starship
+    if ! command_exists starship; then
+        echo "[BOOTSTRAP] Installing Starship"
+        curl -sS https://starship.rs/install.sh | sh
+    else
+        echo "[BOOTSTRAP] Starship is already installed."
+    fi
+
 fi
 
 
