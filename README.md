@@ -28,7 +28,6 @@ While there are a number of installed support apps and libraries, the common
 apps include:
 
 - bat - better cat
-- btop - beautiful top
 - eza - better ls
 - fd - better find
 - fzf - awesome fuzzy finder
@@ -75,7 +74,7 @@ My neovim init.lua has a number of plugins all managed by lazy.nvim:
 My tmux configuration relies on a few extras:
 
 - tpm (https://github.com/tmux-plugins/tpm)
-- catpuccin (https://github.com/catppuccin/tmux)
+- catppuccin (https://github.com/catppuccin/tmux)
 - vim-tmux navigator (https://github.com/christoomey/vim-tmux-navigator)
 
 The bootstrap code should pull tpm but the plugins may need to be installed
