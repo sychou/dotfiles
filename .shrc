@@ -64,8 +64,8 @@ fi
 if [ -d "/opt/homebrew/opt/fzf/bin" ]; then
     PATH="/opt/homebrew/opt/fzf/bin:$PATH"
     export PATH
-elif [ -d "$HOME/.fzf/bin/fzf" ]; then
-    PATH="/$HOME/.fzf/bin/fzf":$PATH
+elif [ -d "$HOME/.fzf/bin" ]; then
+    PATH="$HOME/.fzf/bin":$PATH
     export PATH
 else
     echo "fzf not found"
