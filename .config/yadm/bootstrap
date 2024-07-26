@@ -161,8 +161,15 @@ elif is_linux && command_exists apt; then
         echo "[BOOTSTRAP] Installing Snap packages"
         sudo snap install alacritty --classic
         sudo snap install brave
-        sudo snap install 1password
+        # sudo snap install 1password
         sudo snap install obsidian
+
+        # Install 1password deb file to bypass sandbox restrictions
+        # TODO Need to add protections around this and verify
+        mkdir ~/tmp
+        cd ~/tmp
+        curl https://downloads.1password.com/linux/debian/amd64/stable/1password-latest.deb
+        sudo dpkg -i 1password-latest.deb
 
         # Install WezTerm
         # if ! command_exists wezterm; then
