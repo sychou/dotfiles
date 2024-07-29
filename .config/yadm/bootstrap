@@ -91,6 +91,7 @@ if is_mac; then
             lua \
             luarocks \
             mise \
+            neofetch \
             neovim \
             openssl \
             pipx \
@@ -135,6 +136,7 @@ elif is_linux && command_exists apt; then
         jq \
         lua5.4 \
         luarocks \
+        neofetch \
         neovim \
         pipx \
         ripgrep \
