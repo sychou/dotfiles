@@ -31,13 +31,16 @@ yadm clone https://github.com/sychou/dotfiles
 
 - Start 1Password and login
 - Start Brave
-    - Configure appearance
-    - Download 1password extension
-    - Set up Kagi
+    - Change default browser to Brave
+    - Set up sync
+    - Set up Kagi as default search
 - Start Obsidian
     - Set up vaults via Sync
     - Place in /Users/sean/Vaults (it will automatically create a subdirectory named after vault)
-- Set up Internet Accounts
+- System Settings
+    - Automatically hide and show the Dock
+    - Set up Internet Accounts
+    - Enable iCloud > iCloud Drive > Desktop & Document Folders
 - Restore ~/.ssh files
 
 ## How to Install on Linux
