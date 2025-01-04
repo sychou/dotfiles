@@ -114,13 +114,18 @@ if is_mac; then
             chatgpt \
             claude \
             cleanshot \
+            cursor \
             discord \
+            handbrake \
+            ledger-live \
             microsoft-teams \
             obsidian \
             signal \
             slack \
             tailscale \
             telegram \
+            trezor-suite \
+            vlc \
             webex \
             zed \
             zoom \
@@ -254,7 +259,7 @@ fi
 if command_exists mise; then
     # Set up python with mise
     echo "[BOOTSTRAP] Setting up python and node with mise"
-    mise use --global python@3.11.9
+    mise use --global python@3.11.11
     mise use --global node@latest
 
 else
