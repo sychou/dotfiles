@@ -4,30 +4,31 @@ These dotfiles are designed to be managed by yadm.
 
 ## Setting Up a New Mac
 
-Install NextDNS from App Store
+Remove all apps from Dock (just my personal preference).
 
-Download Ghostty from https://ghostty.org/
+Install NextDNS from App Store and set up with custom ID from https://my.nextdns.io.
 
-Open Ghostty
+Download Ghostty from https://ghostty.org/ and start it.
 
-Install brew
+Install Homebrew (and follow instructions for adding brew to environment).
 
 ```
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Follow instructions for adding brew to environment .zprofile (temporary)
-
-Install yadm
+Install yadm.
 
 ```
 brew install yadm
+```
+
+Clone my dotfiles repo and run the bootstrap.
+```
 yadm clone https://github.com/sychou/dotfiles
 ```
 
 ### Configuration
 
-- Drag all apps off Dock
 - Start 1Password and login
 - Start Brave
     - Configure appearance
