@@ -2,7 +2,9 @@
 
 These dotfiles are designed to be managed by yadm.
 
-## How to Set Up a New Mac
+## Setting Up a New Mac
+
+Install NextDNS from App Store
 
 Download Ghostty from https://ghostty.org/
 
