@@ -38,6 +38,7 @@ yadm clone https://github.com/sychou/dotfiles
     - Set up vaults via Sync
     - Place in /Users/sean/Vaults (it will automatically create a subdirectory named after vault)
 - Set up Internet Accounts
+- Restore ~/.ssh files
 
 ## How to Install on Linux
 
