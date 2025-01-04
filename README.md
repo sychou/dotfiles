@@ -2,7 +2,28 @@
 
 These dotfiles are designed to be managed by yadm.
 
-## How to Install
+## How to Set Up a New Mac
+
+Download Ghostty from https://ghostty.org/
+
+Open Ghostty
+
+Install brew
+
+```
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Follow instructions for adding brew to environment .zprofile (temporary)
+
+Install yadm
+
+```
+brew install yadm
+yadm clone https://github.com/sychou/dotfiles
+```
+
+## How to Install on Linux
 
 Linux
 
@@ -43,17 +64,27 @@ apps include:
 - gdu - disk usage
 - git - version control
 - htop - better top
+- httpie (pipx)
 - jless - json viewer
 - jq - json processor
+- llm (pipx)
+- lua
+- luarocks
+- mise - pyenv replacement
 - neovim - improved vim
+- nerdfetch - improved neofetch
 - node - js interpreter
-- pyenv - python env manager
-- ripgrep (rg) - better grep
+- openssl
+- pipx
+- pyright (pipx)
+- pytube (pipx)
+- ripgrep - better grep
+- ruff (pipx)
 - starship - better prompt
 - tailscale - vpn
-- tldr - better man
-- tmux - terminal multiplexer
-- visidata - csv editor and more
+- tldr (pipx) - better man
+- tmux - terminal multiplexer => replacing with zellij
+- visidata (pipx) - csv editor and more
 
 ## vim and neovim
 
