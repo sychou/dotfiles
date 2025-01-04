@@ -23,6 +23,19 @@ brew install yadm
 yadm clone https://github.com/sychou/dotfiles
 ```
 
+### Configuration
+
+- Drag all apps off Dock
+- Start 1Password and login
+- Start Brave
+    - Configure appearance
+    - Download 1password extension
+    - Set up Kagi
+- Start Obsidian
+    - Set up vaults via Sync
+    - Place in /Users/sean/Vaults (it will automatically create a subdirectory named after vault)
+- Set up Internet Accounts
+
 ## How to Install on Linux
 
 Linux
