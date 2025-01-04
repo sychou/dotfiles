@@ -13,6 +13,7 @@ echo "Loading .profile"
 # PATH
 [ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
 [ -d "$HOME/bin" ] && PATH="$HOME/bin:$PATH"
+[ -d "/opt/homebrew/opt/postgresql@17/bin" ] && PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
 export PATH
 
 # HOMEBREW SETUP

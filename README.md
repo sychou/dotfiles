@@ -2,6 +2,15 @@
 
 These dotfiles are designed to be managed by yadm.
 
+## How to Install
+
+Linux
+
+```
+sudo apt install yadm
+yadm clone https://github.com/sychou/dotfiles
+```
+
 ## sh, bash, and zsh
 
 My main shell is zsh but I wanted to retain backward compatbility with sh
@@ -100,3 +109,18 @@ The following are good and robust color schemes with nvim and wezterm support:
 
 These even have good Obsidian theme support!
 
+## Philosophy
+
+My preference on Mac for installation of packages is:
+
+- Direct when recommended
+- Homebrew (and Casks)
+- Pipx for all Python based apps
+- Direct when not available via brew or pipx
+
+My preference on Ubuntu is:
+
+- Direct when recommended
+- apt
+- snap
+- Direct when not available via apt or snap

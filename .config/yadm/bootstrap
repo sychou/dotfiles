@@ -73,7 +73,7 @@ if is_mac; then
     else
         echo "[BOOTSTRAP] Homebrew already installed"
     fi
-    
+
     # Install brew packages
     if command_exists brew; then
         echo "[BOOTSTRAP] Installing/Updating packages"
@@ -91,7 +91,7 @@ if is_mac; then
             lua \
             luarocks \
             mise \
-            neofetch \
+            nerdfetch \
             neovim \
             openssl \
             pipx \
@@ -108,10 +108,22 @@ if is_mac; then
 
         echo "[BOOTSTRAP] Installing GUI apps in casks"
         brew install --cask \
+            1password \
             1password-cli \
-            alacritty \
+            brave-browser \
+            chatgpt \
+            claude \
+            cleanshot \
+            discord \
+            microsoft-teams \
+            obsidian \
+            signal \
+            slack \
             tailscale \
-            wezterm
+            telegram \
+            webex \
+            zed \
+            zoom \
 
     else
         echo "[BOOTSTRAP] Homebrew installation failed."
@@ -230,7 +242,7 @@ if ! command_exists mise; then
         fi
         chmod +x ~/bin/mise
         mise self-update
-        
+
    else
         echo "[BOOTSTRAP] ERROR - Cannot install mise. Unsupported system."
         exit 1
