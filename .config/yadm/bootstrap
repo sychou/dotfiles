@@ -117,6 +117,7 @@ if is_mac; then
             cursor \
             discord \
             handbrake \
+            hiddenbar \
             ledger-live \
             microsoft-teams \
             obsidian \
