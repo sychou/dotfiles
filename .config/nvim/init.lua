@@ -1,3 +1,4 @@
+-- Theme configuration
 --     catpuccin
 --     catppuccin-latte
 --     catppuccin-frappe
@@ -10,14 +11,26 @@
 --     tokyonight-storm
 --     tokyonight-day
 --     tokyonight-moon
-local chosen_theme = "tokyonight-night"
+local chosen_theme = "catppuccin-mocha"
 
--- Source .vimrc for backward compatibility
-vim.cmd('source ~/.vimrc')
+-- Set leader key to space
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+
+-- Theme switching function
+function _G.apply_theme(theme)
+    vim.cmd("colorscheme " .. theme)
+    -- Update lualine theme to match
+    require('lualine').setup({
+        options = {
+            theme = theme
+        }
+    })
+end
 
 -- Lazy package manager setup
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then -- type: ignore
+if not vim.loop.fs_stat(lazypath) then
     vim.fn.system({
         "git",
         "clone",
@@ -29,35 +42,111 @@ if not vim.loop.fs_stat(lazypath) then -- type: ignore
 end
 vim.opt.rtp:prepend(lazypath)
 
--- Initialize lazy.nvim
-require("lazy").setup("plugins", {})
+-- Initialize lazy.nvim with minimal plugins
+require("lazy").setup({
+    -- Theme
+    {
+        "catppuccin/nvim",
+        name = "catppuccin",
+        lazy = false,
+        priority = 1000,
+        config = function()
+            apply_theme(chosen_theme)
+        end,
+    },
 
--- Theme application function
-function _G.apply_theme(theme)
-    vim.o.background = "dark"
-    vim.opt.termguicolors = true
-    local colorscheme = theme
-    local lualine_theme = theme
+    -- Status line
+    {
+        "nvim-lualine/lualine.nvim",
+        dependencies = { "nvim-tree/nvim-web-devicons" },
+        config = function()
+            require('lualine').setup({
+                options = {
+                    theme = chosen_theme
+                }
+            })
+        end
+    },
 
-    -- if theme == "tokyonight" then
-    --     colorscheme = "tokyonight-night"
-    --     -- lualine_theme remains "tokyonight"
-    -- end
+    -- Git integration
+    {
+        'lewis6991/gitsigns.nvim',
+        config = function()
+            require('gitsigns').setup()
+        end
+    },
 
-    vim.cmd("colorscheme " .. colorscheme)
+    -- Fuzzy finder
+    {
+        "nvim-telescope/telescope.nvim",
+        dependencies = { 
+            "nvim-lua/plenary.nvim",
+            "nvim-treesitter/nvim-treesitter"  -- Required for function search
+        },
+        config = function()
+            local builtin = require('telescope.builtin')
+            vim.keymap.set('n', '<leader>ff', builtin.find_files, {})
+            vim.keymap.set('n', '<leader>fg', builtin.live_grep, {})
+            vim.keymap.set('n', '<leader>fb', builtin.buffers, {})
+            vim.keymap.set('n', '<leader>fh', builtin.help_tags, {})
+            vim.keymap.set('n', '<leader>fs', builtin.treesitter, { desc = "Show Functions" })
+        end
+    },
 
-    -- Lualine setup
-    require('lualine').setup {
-        options = {
-            theme = lualine_theme
-        }
-    }
-end
+    -- Syntax highlighting
+    {
+        "nvim-treesitter/nvim-treesitter",
+        build = ":TSUpdate",
+        config = function()
+            require('nvim-treesitter.configs').setup {
+                ensure_installed = { "c", "lua", "vim", "python", "javascript", "html" },
+                sync_install = false,
+                auto_install = true,
+                highlight = {
+                    enable = true,
+                    additional_vim_regex_highlighting = false,
+                },
+            }
+        end
+    },
 
--- Apply the chosen theme
-apply_theme(chosen_theme)
+    -- CSV handling
+    {
+        'mechatroner/rainbow_csv',
+        config = function()
+            vim.g.rainbow_csv_delim = ','
+        end
+    },
 
--- Create a user command for easier theme switching
+    -- Load which-key from separate file
+    require("plugins.which-key"),
+
+    -- Add other theme plugins
+    { "ellisonleao/gruvbox.nvim" },
+    { "nordtheme/vim" },
+    { "folke/tokyonight.nvim" },
+})
+
+-- Basic Neovim settings
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.termguicolors = true
+vim.opt.expandtab = true
+vim.opt.shiftwidth = 4
+vim.opt.tabstop = 4
+vim.opt.smartindent = true
+vim.opt.wrap = false
+vim.opt.swapfile = false
+vim.opt.backup = false
+vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir"
+vim.opt.undofile = true
+vim.opt.hlsearch = false
+vim.opt.incsearch = true
+vim.opt.scrolloff = 8
+vim.opt.signcolumn = "yes"
+vim.opt.updatetime = 50
+
+-- Create a user command for theme switching
 vim.api.nvim_create_user_command('Theme', function(opts)
     apply_theme(opts.args)
 end, {
@@ -79,22 +168,3 @@ end, {
         }
     end
 })
-
--- Python script runner setup
-vim.api.nvim_create_autocmd("FileType", {
-    pattern = "python",
-    callback = function()
-        -- Set up a local key mapping for Python files
-        vim.api.nvim_buf_set_keymap(0, 'n', '<F5>', ':w<CR>:split<CR>:terminal python3 %<CR>',
-            { noremap = true, silent = true })
-    end
-})
-
--- Create a command to run Python scripts
-vim.api.nvim_create_user_command('RunPython', function()
-    vim.cmd('w')                  -- Save the file
-    vim.cmd('split')              -- Split the window
-    vim.cmd('terminal python3 %') -- Run the current file in the terminal
-end, {})
-
--- End of init.lua
