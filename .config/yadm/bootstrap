@@ -1,321 +1,133 @@
 #!/bin/bash
-# yadm bootstrap script for a new machine
+# yadm bootstrap script for a new Mac
 
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to detect if the system is macOS
-is_mac() {
-    [[ "$(uname)" == "Darwin" ]]
-}
-
-# Function to detect if the system is Linux
-is_linux() {
-    [[ "$(uname)" == "Linux" ]]
-}
-
-# Function to detect macOS on Intel
-is_mac_intel() {
-    is_mac && [[ "$(uname -m)" == "x86_64" ]]
-}
-
-# Function to detect macOS on Apple Silicon
-is_mac_apple_silicon() {
-    is_mac && [[ "$(uname -m)" == "arm64" ]]
-}
-
-# Function to detect Linux on x86_64
-is_linux_x86_64() {
-    is_linux && [[ "$(uname -m)" == "x86_64" ]]
-}
-
-# Function to detect Linux on arm64
-is_linux_arm64() {
-    is_linux && [[ "$(uname -m)" == "aarch64" ]]
-}
-
-# Function to install a font (for ubuntu)
-install_font() {
-    FONT_DIR="/usr/local/share/fonts"
-    if [ ! -f "$FONT_DIR/$1-Regular.ttf" ]; then
-        echo "[BOOTSTRAP] Installing font: $1"
-        mkdir -p "$HOME/tmp"
-        curl -L -o "$HOME/tmp/$1.zip" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/$1.zip"
-        sudo unzip "$HOME/tmp/$1.zip" -d "$FONT_DIR"
-        rm "$HOME/tmp/$1.zip"
-    else
-        echo "[BOOTSTRAP] Font $1 already installed"
-    fi
-}
-
-# Check for the operating system
-if is_mac; then
-    echo "[BOOTSTRAP] macOS detected."
-
-    # Check for Xcode CLI tools and install if not present
-    if ! xcode-select -p &> /dev/null; then
-        echo "[BOOTSTRAP] Installing Xcode Command Line Tools"
-        xcode-select --install
-        # Wait for the installation to complete
-        until xcode-select -p &> /dev/null; do
-            sleep 5
-        done
-    else
-        echo "[BOOTSTRAP] Xcode Command Line Tools already installed"
-    fi
-
-    # Install Homebrew if needed
-    if ! command_exists brew; then
-        echo "[BOOTSTRAP] Installing Homebrew"
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-        echo "[BOOTSTRAP] Homebrew already installed"
-    fi
-
-    # Install brew packages
-    if command_exists brew; then
-        echo "[BOOTSTRAP] Installing/Updating packages"
-        brew update
-        brew install \
-            bat \
-            eza \
-            fd \
-            fzf \
-            gdu \
-            git \
-            htop \
-            jless \
-            jq \
-            lua \
-            luarocks \
-            mise \
-            nerdfetch \
-            neovim \
-            openssl \
-            pipx \
-            ripgrep \
-            starship \
-            tmux
-
-        # Install fonts
-        echo "[BOOTSTRAP] Installing fonts in casks"
-        # brew tap homebrew/cask-fonts
-        brew install --cask \
-            font-fira-code-nerd-font \
-            font-jetbrains-mono-nerd-font
-
-        echo "[BOOTSTRAP] Installing GUI apps in casks"
-        brew install --cask \
-            1password \
-            1password-cli \
-            brave-browser \
-            chatgpt \
-            claude \
-            cleanshot \
-            cursor \
-            discord \
-            handbrake \
-            ledger-live \
-            microsoft-teams \
-            obsidian \
-            signal \
-            slack \
-            tailscale \
-            telegram \
-            trezor-suite \
-            vlc \
-            webex \
-            zed \
-            zoom \
-
-    else
-        echo "[BOOTSTRAP] Homebrew installation failed."
-        exit 1
-    fi
-
-elif is_linux && command_exists apt; then
-    echo "[BOOTSTRAP] Apt-based system detected (Ubuntu optimized). Using apt."
-
-    # Install apt packages
-    sudo apt update
-    sudo apt install -y \
-        bat \
-        curl \
-        eza \
-        fd-find \
-        gcc \
-        gdu \
-        git \
-        gpg \
-        htop \
-        jq \
-        lua5.4 \
-        luarocks \
-        neofetch \
-        neovim \
-        pipx \
-        ripgrep \
-        tailscale \
-        tmux
-
-    # Check for GUI
-    if xset q &>/dev/null; then
-        echo "[BOOTSTRAP] GUI detected. Installing gui apps."
-
-        # Install fonts
-        echo "[BOOTSTRAP] Installing fonts"
-        install_font "FiraCode"
-        install_font "JetBrainsMono"
-
-        # Install Snap and Snap packages
-        if ! command_exists snap; then
-            echo "[BOOTSTRAP] Installing Snap"
-            sudo apt install -y snapd
-            sudo snap install core
-        fi
-
-        # Install Snap packages
-        echo "[BOOTSTRAP] Installing Snap packages"
-        sudo snap install alacritty --classic
-        sudo snap install brave
-        # sudo snap install 1password
-        sudo snap install obsidian
-
-        # Install 1password deb file to bypass sandbox restrictions
-        # TODO Need to add protections around this and verify
-        mkdir ~/tmp
-        cd ~/tmp
-        curl https://downloads.1password.com/linux/debian/amd64/stable/1password-latest.deb
-        sudo dpkg -i 1password-latest.deb
-
-        # Install WezTerm
-        # if ! command_exists wezterm; then
-        #     echo "[BOOTSTRAP] Installing WezTerm"
-        #     curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
-        #     echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list
-        #     sudo apt update
-        #     sudo apt install -y wezterm
-        # else
-        #     echo "[BOOTSTRAP] WezTerm already installed"
-        # fi
-
-        # Install kitty
-        # if ! command_exists kitty; then
-        #     echo "[BOOTSTRAP] Installing Kitty"
-        #     curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
-        #     # Add Kitty to PATH
-        #     mkdir -p ~/.local/bin
-        #     ln -s ~/.local/kitty.app/bin/kitty ~/.local/bin/
-        #     # Create desktop shortcut
-        #     cp ~/.local/kitty.app/share/applications/kitty.desktop ~/.local/share/applications/
-        #     sed -i "s|Icon=kitty|Icon=/home/$USER/.local/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g" ~/.local/share/applications/kitty.desktop
-        # else
-        #     echo "[BOOTSTRAP] Kitty already installed"
-        # fi
-        # curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
-
-        echo "[BOOTSTRAP] Manually install:"
-        echo "  - 1password extension"
-        echo "  - raindrop extension"
-    fi
-else
-    echo "[BOOTSTRAP] Neither macOS nor APT-based Linux detected. Please install one of them first."
+if [[ "$(uname)" != "Darwin" ]]; then
+    echo "[BOOTSTRAP] This bootstrap is for macOS only."
     exit 1
 fi
 
-# Common Setup
+echo "[BOOTSTRAP] macOS detected."
 
-# Install mise
-if ! command_exists mise; then
-    if is_mac; then
-        echo "[BOOTSTRAP] Installing mise for Mac"
-        brew install mise
-    elif is_linux; then
-        echo "[BOOTSTRAP] Installing mise for Linux"
-        mkdir -p ~/bin
-        if is_linux_x86_64; then
-            echo "[BOOTSTRAP] Downloading mise for Linux x64"
-            curl -fsSL https://mise.jdx.dev/mise-latest-linux-x64 > ~/bin/mise
-        elif is_linux_arm64; then
-            echo "[BOOTSTRAP] Downloading mise for Linux arm64"
-            curl -fsSL https://mise.jdx.dev/mise-latest-linux-arm64 > ~/bin/mise
-        else
-            echo "[BOOTSTRAP] ERROR - Unsupported Linux architecture for mise installation"
-            exit 1
-        fi
-        chmod +x ~/bin/mise
-        mise self-update
-
-   else
-        echo "[BOOTSTRAP] ERROR - Cannot install mise. Unsupported system."
-        exit 1
-    fi
+# Check for Xcode CLI tools and install if not present
+if ! xcode-select -p &> /dev/null; then
+    echo "[BOOTSTRAP] Installing Xcode Command Line Tools"
+    xcode-select --install
+    until xcode-select -p &> /dev/null; do
+        sleep 5
+    done
 else
-    echo "[BOOTSTRAP] mise already installed"
+    echo "[BOOTSTRAP] Xcode Command Line Tools already installed"
 fi
 
-if command_exists mise; then
-    # Set up python with mise
-    echo "[BOOTSTRAP] Setting up python and node with mise"
-    mise use --global python@3.11.11
-    mise use --global node@latest
+# Install Homebrew if needed
+if ! command_exists brew; then
+    echo "[BOOTSTRAP] Installing Homebrew"
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
 
+if ! command_exists brew; then
+    echo "[BOOTSTRAP] Homebrew installation failed."
+    exit 1
+fi
+
+echo "[BOOTSTRAP] Installing/Updating packages"
+brew update
+
+brew install \
+    bat \
+    eza \
+    fd \
+    flyctl \
+    fzf \
+    gdu \
+    gh \
+    git \
+    htop \
+    jless \
+    jq \
+    lazygit \
+    lf \
+    lua \
+    mise \
+    mlx \
+    mosh \
+    nerdfetch \
+    neovim \
+    ollama \
+    openssl \
+    ripgrep \
+    starship \
+    temporal \
+    tmux \
+    tree \
+    uv \
+    yadm \
+    yq
+
+echo "[BOOTSTRAP] Installing fonts"
+brew install --cask \
+    font-fira-code-nerd-font \
+    font-jetbrains-mono-nerd-font
+
+echo "[BOOTSTRAP] Installing GUI apps"
+brew install --cask \
+    1password \
+    1password-cli \
+    bambu-studio \
+    brave-browser \
+    chatgpt \
+    claude \
+    cleanshot \
+    cursor \
+    discord \
+    docker \
+    docker-desktop \
+    google-chrome \
+    granola \
+    handbrake \
+    logi-options+ \
+    microsoft-teams \
+    monitorcontrol \
+    notion \
+    obsidian \
+    postman \
+    signal \
+    slack \
+    spotify \
+    tailscale \
+    tailscale-app \
+    telegram \
+    trezor-suite \
+    visual-studio-code \
+    vlc \
+    webex \
+    whatsapp \
+    zed \
+    zoom
+
+# Set up python and node with mise
+if command_exists mise; then
+    echo "[BOOTSTRAP] Setting up python and node with mise"
+    mise use --global python@3.11
+    mise use --global python@3.12
+    mise use --global node@latest
 else
     echo "[BOOTSTRAP] ERROR - mise installation failed"
     exit 1
 fi
 
-if command_exists pipx; then
-    # Install Python apps
-    echo "[BOOTSTRAP] Installing Python apps with pipx"
-    pipx install \
-        tldr \
-        ruff \
-        httpie \
-        pyright \
-        pytube \
-        llm \
-        visidata
+# Install Python tools with uv
+if command_exists uv; then
+    echo "[BOOTSTRAP] Installing Python tools with uv"
+    uv tool install tldr
 else
-    echo "[BOOTSTRAP] ERROR - pipx is missing"
+    echo "[BOOTSTRAP] ERROR - uv is missing"
 fi
-
-# Manually install some things under Linux
-if is_linux; then
-    echo "[BOOTSTRAP] Installing apps manually under Linux"
-
-    # jless
-    if ! command_exists jless; then
-        echo "[BOOTSTRAP] Installing jless"
-        mkdir -p $HOME/tmp $HOME/bin
-        curl -L -o $HOME/tmp/jless.zip https://github.com/PaulJuliusMartinez/jless/releases/download/v0.9.0/jless-v0.9.0-x86_64-unknown-linux-gnu.zip
-        unzip $HOME/tmp/jless.zip -d $HOME/bin
-        rm $HOME/tmp/jless.zip
-    else
-        echo "[BOOTSTRAP] jless already installed"
-    fi
-
-    # fzf
-    if ! command_exists fzf; then
-        echo "[BOOTSTRAP] Installing fzf"
-        git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
-        ~/.fzf/install
-    else
-        echo "[BOOTSTRAP] fzf is already installed."
-    fi
-
-    # starship
-    if ! command_exists starship; then
-        echo "[BOOTSTRAP] Installing Starship"
-        curl -sS https://starship.rs/install.sh | sh
-    else
-        echo "[BOOTSTRAP] Starship is already installed."
-    fi
-
-fi
-
 
 # Clone tpm if not already present
 if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
@@ -324,6 +136,4 @@ if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
 fi
 
 echo "[BOOTSTRAP] Setup is complete."
-echo "[BOOTSTRAP] You may need to run 'chsh' to change your shell to /usr/bin/zsh."
 echo "[BOOTSTRAP] Remember to install tpm plugins in tmux <leader>I"
-echo "[BOOTSTRAP] Please log out and log back in using zsh."
