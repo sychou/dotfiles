@@ -90,6 +90,9 @@ if command -v fzf > /dev/null 2>&1; then
     }
 fi
 
+if command -v mosh > /dev/null 2>&1; then
+    alias mm="mosh --server=/opt/homebrew/bin/mosh-server mm"
+fi
 
 # pyenv
 # if [ -d "$HOME/.pyenv/bin" ]; then
@@ -126,12 +129,12 @@ venv() {
 }
 
 # Start SSH agent if not already running and if the SSH key exists
-if [ -z "$SSH_AUTH_SOCK" ]; then
-    eval "$(ssh-agent -s)"
-    if [ -f "$HOME/.ssh/id_rsa" ]; then
-        ssh-add "$HOME/.ssh/id_rsa"
-    fi
-    if [ -f "$HOME/.ssh/id_rsa_llanero" ]; then
-        ssh-add "$HOME/.ssh/id_rsa_llanero"
-    fi
-fi
+#if [ -z "$SSH_AUTH_SOCK" ]; then
+#    eval "$(ssh-agent -s)"
+#    if [ -f "$HOME/.ssh/id_rsa" ]; then
+#        ssh-add "$HOME/.ssh/id_rsa"
+#    fi
+#    if [ -f "$HOME/.ssh/id_rsa_llanero" ]; then
+#        ssh-add "$HOME/.ssh/id_rsa_llanero"
+#    fi
+#fi

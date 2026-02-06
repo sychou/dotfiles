@@ -1,5 +1,5 @@
 -- Theme configuration
---     catpuccin
+--     catppuccin
 --     catppuccin-latte
 --     catppuccin-frappe
 --     catppuccin-macchiato
@@ -19,13 +19,10 @@ vim.g.maplocalleader = " "
 
 -- Theme switching function
 function _G.apply_theme(theme)
-    vim.cmd("colorscheme " .. theme)
-    -- Update lualine theme to match
-    require('lualine').setup({
-        options = {
-            theme = theme
-        }
-    })
+    local ok, err = pcall(vim.cmd, "colorscheme " .. theme)
+    if not ok then
+        vim.notify("Failed to load theme '" .. theme .. "': " .. err, vim.log.levels.ERROR)
+    end
 end
 
 -- Lazy package manager setup
@@ -62,7 +59,7 @@ require("lazy").setup({
         config = function()
             require('lualine').setup({
                 options = {
-                    theme = chosen_theme
+                    theme = 'auto'
                 }
             })
         end
@@ -79,18 +76,10 @@ require("lazy").setup({
     -- Fuzzy finder
     {
         "nvim-telescope/telescope.nvim",
-        dependencies = { 
+        dependencies = {
             "nvim-lua/plenary.nvim",
             "nvim-treesitter/nvim-treesitter"  -- Required for function search
         },
-        config = function()
-            local builtin = require('telescope.builtin')
-            vim.keymap.set('n', '<leader>ff', builtin.find_files, {})
-            vim.keymap.set('n', '<leader>fg', builtin.live_grep, {})
-            vim.keymap.set('n', '<leader>fb', builtin.buffers, {})
-            vim.keymap.set('n', '<leader>fh', builtin.help_tags, {})
-            vim.keymap.set('n', '<leader>fs', builtin.treesitter, { desc = "Show Functions" })
-        end
     },
 
     -- Syntax highlighting
@@ -125,6 +114,8 @@ require("lazy").setup({
     { "ellisonleao/gruvbox.nvim" },
     { "nordtheme/vim" },
     { "folke/tokyonight.nvim" },
+}, {
+    rocks = { enabled = false },
 })
 
 -- Basic Neovim settings
@@ -135,7 +126,9 @@ vim.opt.expandtab = true
 vim.opt.shiftwidth = 4
 vim.opt.tabstop = 4
 vim.opt.smartindent = true
-vim.opt.wrap = false
+vim.opt.wrap = true
+vim.opt.linebreak = true
+vim.opt.breakindent = true
 vim.opt.swapfile = false
 vim.opt.backup = false
 vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir"
@@ -145,6 +138,12 @@ vim.opt.incsearch = true
 vim.opt.scrolloff = 8
 vim.opt.signcolumn = "yes"
 vim.opt.updatetime = 50
+
+-- Keybindings for wrapped line navigation
+vim.keymap.set('n', 'j', 'gj', { noremap = true, silent = true })
+vim.keymap.set('n', 'k', 'gk', { noremap = true, silent = true })
+vim.keymap.set('v', 'j', 'gj', { noremap = true, silent = true })
+vim.keymap.set('v', 'k', 'gk', { noremap = true, silent = true })
 
 -- Create a user command for theme switching
 vim.api.nvim_create_user_command('Theme', function(opts)

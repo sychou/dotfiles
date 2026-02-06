@@ -12,8 +12,8 @@ return {
             -- Leader keymaps
             { "<leader>?",   "<cmd>WhichKey<CR>",                                                      desc = "Show Keymaps" },
             { "<leader>e",   group = "Explore" },
-            { "<leader>ee",  "<leader>dd :Lexplore %:p:h<CR>",                                        desc = "Explore Dir of File" },
-            { "<leader>ea",  "<leader>dd :Lexplore<CR>",                                              desc = "Explore Current Dir" },
+            { "<leader>ee",  "<cmd>Lexplore %:p:h<CR>",                                               desc = "Explore Dir of File" },
+            { "<leader>ea",  "<cmd>Lexplore<CR>",                                                     desc = "Explore Current Dir" },
 
             { "<leader>f",   group = "Find" },
             { "<leader>ff",  "<cmd>Telescope find_files<CR>",                                         desc = "Find File" },
@@ -31,9 +31,6 @@ return {
             { "<leader>Gr",  "<cmd>Gitsigns reset_hunk<CR>",                                          desc = "Reset Hunk" },
             { "<leader>Gp",  "<cmd>Gitsigns preview_hunk<CR>",                                        desc = "Preview Hunk" },
             { "<leader>Gb",  "<cmd>Gitsigns blame_line<CR>",                                          desc = "Blame Line" },
-            { "<leader>Ga",  "<cmd>GitAdd<CR>",                                                       desc = "Git Add" },
-            { "<leader>Gc",  "<cmd>GitCommit<CR>",                                                    desc = "Git Commit" },
-            { "<leader>Gd",  "<cmd>GitDiff<CR>",                                                      desc = "Git Diff" },
 
             -- Non-leader keymaps
             { "[c",          "<cmd>Gitsigns prev_hunk<CR>",                                           desc = "Previous Git Hunk" },

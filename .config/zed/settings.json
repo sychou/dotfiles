@@ -7,6 +7,12 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
+  "ssh_connections": [
+    {
+      "host": "nautilus",
+      "projects": []
+    }
+  ],
   "theme": "Ayu Mirage",
   // "theme": "Gruvbox Dark",
   "vim_mode": false,
