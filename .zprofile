@@ -7,3 +7,5 @@ if [ -f "$HOME/.profile" ]; then
     . "$HOME/.profile"
 fi
 
+
+eval "$(/opt/homebrew/bin/brew shellenv)"
