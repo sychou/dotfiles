@@ -9,8 +9,8 @@ set ifs "\n"             # proper handling of filenames with spaces
 
 # --- Visual ---
 set preview
-set previewer bat --color=always --style=plain --paging=never
-set icons                # file type icons (requires Nerd Font in Ghostty)
+set previewer ~/.config/lf/previewer.sh
+# set icons              # file type icons (requires Nerd Font in Ghostty)
 set drawbox              # draw borders around panes
 set cursorpreviewfmt ""  # hide cursor in preview pane
 
