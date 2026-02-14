@@ -79,7 +79,6 @@ brew install --cask \
     1password \
     1password-cli \
     bambu-studio \
-    brave-browser \
     chatgpt \
     claude \
     cleanshot \
@@ -107,7 +106,6 @@ brew install --cask \
     vlc \
     webex \
     whatsapp \
-    zed \
     zoom
 
 # Set up python and node with mise

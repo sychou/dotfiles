@@ -1,1 +1,72 @@
-set previewer ~/.config/lf/previewer.sh
+# ============================================================
+# lf configuration (~/.config/lf/lfrc)
+# ============================================================
+
+# --- Shell ---
+set shell zsh
+set shellopts '-euy'    # -e: exit on error, -u: error on unset vars, -y: shwordsplit (zsh-specific)
+set ifs "\n"             # proper handling of filenames with spaces
+
+# --- Visual ---
+set preview
+set previewer bat --color=always --style=plain --paging=never
+set icons                # file type icons (requires Nerd Font in Ghostty)
+set drawbox              # draw borders around panes
+set cursorpreviewfmt ""  # hide cursor in preview pane
+
+# --- Navigation & Search ---
+set hidden               # show hidden files by default (toggle with zh)
+set ignorecase           # case-insensitive search
+set smartcase            # ...unless query contains uppercase
+set scrolloff 5          # keep 5 lines of context above/below cursor
+set period 1             # auto-refresh directory listings every second
+
+# --- Directory Shortcuts ---
+map gh cd ~
+map gd cd ~/Desktop
+map gi cd ~/Desktop/INBOX
+map gp cd ~/Desktop/PROJECTS
+map gc cd ~/Desktop/CHOUFAM
+map gl cd ~/Desktop/LIBRARY
+map ga cd ~/Desktop/ARCHIVES
+map gC cd ~/.config
+
+# --- File Operations ---
+
+# create directory inline
+cmd mkdir %mkdir -p "$@"
+map a push :mkdir<space>
+
+# create file inline
+cmd touch %touch "$@"
+map T push :touch<space>
+
+# trash to macOS Finder trash (install: brew install trash && brew link --force trash)
+cmd trash %trash $fx
+map D trash
+
+# open selected files in nvim
+map e $nvim $fx
+
+# --- Archive Extraction ---
+cmd extract ${{
+    case "$f" in
+        *.tar.bz2) tar xjf "$f" ;;
+        *.tar.gz)  tar xzf "$f" ;;
+        *.tar.xz)  tar xJf "$f" ;;
+        *.zip)     unzip "$f" ;;
+        *.rar)     unrar x "$f" ;;
+        *.7z)      7z x "$f" ;;
+    esac
+}}
+map x extract
+
+# --- cd on quit ---
+# lets your shell follow lf's directory when you exit
+# pair with a shell function in .zshrc:
+#   lf() { command lf -last-dir-path="$HOME/.config/lf/lastdir" "$@"; cd "$(cat "$HOME/.config/lf/lastdir")" }
+cmd on-quit &{{
+    printf '%s' "$PWD" > ~/.config/lf/lastdir
+}}
+
+
