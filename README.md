@@ -1,10 +1,10 @@
 # Dotfiles
 
-These dotfiles are designed to be managed by yadm.
+These dotfiles are managed by [yadm](https://yadm.io/).
 
 ## Setting Up a New Mac
 
-Remove all apps from Dock (just my personal preference).
+Remove all apps from Dock (personal preference).
 
 Install NextDNS from App Store and set up with custom ID from https://my.nextdns.io.
 
@@ -23,15 +23,18 @@ brew install yadm
 ```
 
 Clone my dotfiles repo and run the bootstrap.
+
 ```
 yadm clone https://github.com/sychou/dotfiles
 ```
 
+The bootstrap script handles everything else: Homebrew packages, cask apps, fonts, mise runtimes, and Python tools.
+
 ### Configuration
 
 - Start 1Password and login
-- Start Brave
-    - Change default browser to Brave
+- Start Brave or Chrome
+    - Change default browser
     - Set up sync
     - Set up Kagi as default search
 - Start Obsidian
@@ -43,135 +46,164 @@ yadm clone https://github.com/sychou/dotfiles
     - Enable iCloud > iCloud Drive > Desktop & Document Folders
 - Restore ~/.ssh files
 
-## How to Install on Linux
-
-Linux
+## Tracked Files
 
 ```
-sudo apt install yadm
-yadm clone https://github.com/sychou/dotfiles
+.bash_profile
+.bashrc
+.config/gh/config.yml
+.config/ghostty/config
+.config/git/ignore
+.config/lf/lfrc
+.config/lf/previewer.sh
+.config/mise/config.toml
+.config/nvim/.luarc.json
+.config/nvim/init.lua
+.config/nvim/lua/plugins/which-key.lua
+.config/yadm/bootstrap
+.config/zed/keymap.json
+.config/zed/settings.json
+.gitconfig
+.inputrc
+.nethackrc
+.profile
+.shrc
+.sqliterc
+.tmux.conf
+.vim/colors/nord.vim
+.vimrc
+.visidatarc
+.zprofile
+.zshrc
+README.md
+bin/fzf-preview.sh
 ```
 
 ## sh, bash, and zsh
 
-My main shell is zsh but I wanted to retain backward compatbility with sh
-(dash), bash, and zsh.
+Main shell is zsh but these configs retain backward compatibility with sh (dash), bash, and zsh.
 
-### profile files
+### Profile files
 
-`.profile` contains the majority of login shell config
-`.bash_profile` sources `.profile` and add bash-specific config
-`.zprofile` sources `.profile` and add zsh-specific config
+- `.profile` contains the majority of login shell config
+- `.bash_profile` sources `.profile` and adds bash-specific config
+- `.zprofile` sources `.profile` and adds zsh-specific config
 
-### rc files
+### RC files
 
-`.shrc` contains the majority of interactive shell config
-`.bashrc` sources `.shrc` and adds bash-specific config
-`.zshrc` sources `.shrc` and add zsh-specific config
+- `.shrc` contains the majority of interactive shell config
+- `.bashrc` sources `.shrc` and adds bash-specific config
+- `.zshrc` sources `.shrc` and adds zsh-specific config
 
-Note that `.shrc` is not loaded by dash (sh) by default. If using dash, manually
-source `.shrc` by `source .shrc`.
+Note: `.shrc` is not loaded by dash (sh) by default. If using dash, manually source it with `source .shrc`.
 
-### Installed apps
+## Installed Packages
 
-While there are a number of installed support apps and libraries, the common
-apps include:
+The bootstrap script installs everything via Homebrew. Here are the key CLI tools:
 
-- bat - better cat
-- eza - better ls
-- fd - better find
-- fzf - awesome fuzzy finder
-- gdu - disk usage
-- git - version control
-- htop - better top
-- httpie (pipx)
-- jless - json viewer
-- jq - json processor
-- llm (pipx)
-- lua
-- luarocks
-- mise - pyenv replacement
-- neovim - improved vim
-- nerdfetch - improved neofetch
-- node - js interpreter
+- bat, better cat
+- eza, better ls
+- fd, better find
+- fzf, fuzzy finder
+- gdu, disk usage
+- gh, GitHub CLI
+- git, version control
+- htop, better top
+- jless, JSON viewer
+- jq, JSON processor
+- lazygit, git TUI
+- lf, terminal file manager
+- lua, scripting language
+- mise, runtime version manager (python, node)
+- mlx, Apple ML framework
+- mosh, better ssh
+- neovim, improved vim
+- nerdfetch, improved neofetch
+- ollama, local LLM runner
 - openssl
-- pipx
-- pyright (pipx)
-- pytube (pipx)
-- ripgrep - better grep
-- ruff (pipx)
-- starship - better prompt
-- tailscale - vpn
-- tldr (pipx) - better man
-- tmux - terminal multiplexer => replacing with zellij
-- visidata (pipx) - csv editor and more
+- ripgrep, better grep
+- starship, better prompt
+- temporal, workflow engine
+- tmux, terminal multiplexer
+- tree, directory listing
+- uv, Python package manager
+- yadm, dotfile manager
+- yq, YAML processor
+
+### Fonts (Cask)
+
+- FiraCode Nerd Font
+- JetBrains Mono Nerd Font
+
+### GUI Apps (Cask)
+
+1Password, Bambu Studio, ChatGPT, Claude, CleanShot, Cursor, Discord, Docker, Google Chrome, Granola, HandBrake, Logi Options+, Microsoft Teams, MonitorControl, Notion, Obsidian, Postman, Signal, Slack, Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex, WhatsApp, Zoom
+
+### Python Tools (via uv)
+
+- tldr, better man pages
+
+## Ghostty
+
+Terminal emulator. Config at `.config/ghostty/config`.
+
+- Font: FiraCode Nerd Font
+- Global quick terminal: `ctrl+space`
+- Shift+enter sends literal newline
+- SSH env shell integration enabled
+
+## lf (Terminal File Manager)
+
+Config at `.config/lf/lfrc` with a custom previewer script.
+
+Key bindings:
+- `gh` home, `gd` Desktop, `gi` INBOX, `gp` PROJECTS, `gc` CHOUFAM, `gl` LIBRARY, `ga` ARCHIVES, `gC` ~/.config
+- `a` create directory, `T` create file, `D` trash, `e` open in nvim, `x` extract archive
+
+On quit, lf writes its current directory so the shell can follow (pair with a shell function in `.zshrc`).
 
 ## vim and neovim
 
-My main editor is neovim but I wanted to have vim be usable on systems where I
-haven't loaded up neovim for whatever reason.
+Main editor is neovim but `.vimrc` keeps vim usable on systems without neovim.
 
-`.vimrc` contains basic vim config
-`./config/nvim/init.lua` references `.vimrc` but adds neovim specific plugins
+`.config/nvim/init.lua` is a standalone neovim config managed by lazy.nvim with these plugins:
 
-My neovim init.lua has a number of plugins all managed by lazy.nvim:
+- catppuccin (default theme: catppuccin-mocha)
+- lualine (status line)
+- gitsigns (git integration)
+- telescope (fuzzy finder)
+- treesitter (syntax highlighting)
+- rainbow_csv (CSV handling)
+- which-key (keybinding help)
+- gruvbox, nord, tokyonight (additional themes)
 
-- various color schemes
-- lualine
-- vim-tmux-navigator
-- treesitter
-- lsp (configured for python, lua, and json)
-- cmp autocompletion
-- which-key
-- telescope
-- gitsigns
-- nvim-surround
-- rainbow_csv
-- dressing
+Theme switching via `:Theme <name>`.
 
-## tmux and neovim
+## tmux
 
-My tmux configuration relies on a few extras:
+Prefix is `ctrl-a` (not the default `ctrl-b`). Status bar at the top.
 
-- tpm (https://github.com/tmux-plugins/tpm)
-- catppuccin (https://github.com/catppuccin/tmux)
-- vim-tmux navigator (https://github.com/christoomey/vim-tmux-navigator)
+Plugins managed by tpm:
+- catppuccin (status bar theme, frappe flavor)
+- vim-tmux-navigator (seamless pane navigation with neovim via `ctrl+h/j/k/l`)
 
-The bootstrap code should pull tpm but the plugins may need to be installed
-via `<leader>I`. 
-
-These plugins create a much better looking tmux, but more importantly,
-enable seamless pane navigation from tmux and neovim using `<ctrl>h/j/k/l`
-without any leader key required.
-
-## wezterm and alacritty
-
-My main terminal is wezterm so it's configuration will be the most up-to-date.
-There is an alacritty config file as well but it may be out of date.
+The bootstrap clones tpm automatically but plugins need to be installed via `<prefix>I` on first run.
 
 ## Color Schemes
 
-The following are good and robust color schemes with nvim and wezterm support:
+Good color schemes with broad support across nvim, ghostty, tmux, and obsidian:
 
-- [Catpuccin](https://catppuccin.com/)
+- [Catppuccin](https://catppuccin.com/)
 - [Gruvbox](https://github.com/ellisonleao/gruvbox.nvim)
 - [Nord](https://www.nordtheme.com/ports/vim)
 - [Tokyo Night](https://github.com/folke/tokyonight.nvim)
 
-These even have good Obsidian theme support!
-
 ## Philosophy
 
-My preference on Mac for installation of packages is:
+Package installation preference on Mac:
 
-- Direct when recommended
-- Homebrew (and Casks)
-- Pipx for all Python based apps
-- Direct when not available via brew or pipx
+1. Direct when recommended
+2. Homebrew (and Casks)
+3. uv for Python-based tools
+4. Direct when not available via brew or uv
 
-My preference on Ubuntu is:
-
-- Direct when recommended
-- apt
-- snap
-- Direct when not available via apt or snap

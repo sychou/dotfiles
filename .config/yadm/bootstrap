@@ -86,6 +86,7 @@ brew install --cask \
     discord \
     docker \
     docker-desktop \
+    ghostty \
     google-chrome \
     granola \
     handbrake \

@@ -92,6 +92,7 @@ fi
 
 if command -v mosh > /dev/null 2>&1; then
     alias mm="mosh --server=/opt/homebrew/bin/mosh-server mm"
+    alias mms="mosh --server=/opt/homebrew/bin/mosh-server sheldon@mm-sheldon-26"
 fi
 
 # pyenv
