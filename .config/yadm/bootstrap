@@ -65,6 +65,7 @@ brew install \
     starship \
     temporal \
     tmux \
+    trash \
     tree \
     uv \
     yadm \
