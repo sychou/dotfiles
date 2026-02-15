@@ -113,7 +113,6 @@ brew install --cask \
 # Set up python and node with mise
 if command_exists mise; then
     echo "[BOOTSTRAP] Setting up python and node with mise"
-    mise use --global python@3.11
     mise use --global python@3.12
     mise use --global node@latest
 else
@@ -125,6 +124,7 @@ fi
 if command_exists uv; then
     echo "[BOOTSTRAP] Installing Python tools with uv"
     uv tool install tldr
+    uv tool install csvkit
 else
     echo "[BOOTSTRAP] ERROR - uv is missing"
 fi
