@@ -46,6 +46,7 @@ brew install \
     fzf \
     gdu \
     gh \
+    gogcli \
     git \
     htop \
     jless \
