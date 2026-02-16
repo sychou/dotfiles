@@ -78,8 +78,12 @@ require("lazy").setup({
         "nvim-telescope/telescope.nvim",
         dependencies = {
             "nvim-lua/plenary.nvim",
-            "nvim-treesitter/nvim-treesitter"  -- Required for function search
+            "nvim-treesitter/nvim-treesitter",  -- Required for function search
+            "crispgm/telescope-heading.nvim",
         },
+        config = function()
+            require('telescope').load_extension('heading')
+        end,
     },
 
     -- Syntax highlighting

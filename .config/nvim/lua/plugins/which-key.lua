@@ -21,6 +21,7 @@ return {
             { "<leader>fb",  "<cmd>Telescope buffers<CR>",                                            desc = "Buffers" },
             { "<leader>fh",  "<cmd>Telescope help_tags<CR>",                                          desc = "Help Tags" },
             { "<leader>fs",  "<cmd>Telescope treesitter<CR>",                                         desc = "Show Functions" },
+            { "<leader>fH",  "<cmd>Telescope heading<CR>",                                          desc = "Headings" },
 
             { "<leader>r",   group = "Run" },
             { "<leader>rc",  "<cmd>source $MYVIMRC<CR>",                                              desc = "Reload Config" },
