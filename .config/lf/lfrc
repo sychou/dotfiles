@@ -47,6 +47,14 @@ cmd trash %trash $fx
 map d trash
 map D trash
 
+# open text/markdown in nvim, everything else in macOS default app
+cmd open ${{
+    case $(file --mime-type -b "$f") in
+        text/*|application/json) nvim "$f" ;;
+        *) open "$f" ;;
+    esac
+}}
+
 # open selected files in nvim
 map e $nvim $fx
 
