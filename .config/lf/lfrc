@@ -12,6 +12,7 @@ set preview
 set previewer ~/.config/lf/previewer.sh
 # set icons              # file type icons (requires Nerd Font in Ghostty)
 set drawbox              # draw borders around panes
+set ratios 1:2           # two-pane layout (dir:preview)
 set cursorpreviewfmt ""  # hide cursor in preview pane
 
 # --- Navigation & Search ---
@@ -43,10 +44,15 @@ map T push :touch<space>
 
 # trash to macOS Finder trash (install: brew install trash && brew link --force trash)
 cmd trash %trash $fx
+map d trash
 map D trash
 
 # open selected files in nvim
 map e $nvim $fx
+
+# copy full path to clipboard
+cmd yank-path $echo -n "$f" | pbcopy
+map Y yank-path
 
 # --- Archive Extraction ---
 cmd extract ${{
