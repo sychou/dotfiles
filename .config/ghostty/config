@@ -1,4 +1,19 @@
-font-family = FiraCode Nerd Font
 keybind = global:ctrl+space=toggle_quick_terminal
 keybind = shift+enter=text:\n
 shell-integration-features = ssh-env
+unfocused-split-opacity = 0.50
+term = xterm-256color
+link-url = true
+
+#font-family = JetBrains Mono Light
+#font-family-bold = JetBrains Mono Bold
+#font-family-italic = JetBrains Mono Italic
+#font-family-bold-italic = JetBrains Mono Bold Italic
+font-family = FiraCode Nerd Font Mono
+font-family-bold = FiraCode Nerd Font Mono Bold
+font-size = 13
+font-thicken = true
+adjust-cursor-thickness = 175%
+adjust-cell-width = -4%
+window-padding-x = 12
+window-padding-y = 10
