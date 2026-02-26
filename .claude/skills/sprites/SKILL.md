@@ -9,28 +9,71 @@ Build HTML pages and web apps, deploy them to a Sprite sandbox, and give the use
 
 ## Overview
 
-Sprites are persistent, hardware-isolated Linux VMs (via sprites.dev / Fly.io). They run a web server on port 8080 and expose a public URL. This skill uses them as live preview environments.
+Sprites are persistent, hardware-isolated Linux VMs (via sprites.dev / Fly.io). They expose a public URL routed to a configurable port (default 8080). This skill uses them as live preview environments.
 
-## CLI Reference
+## CLI Reference (Host)
+
+Commands run from the local machine:
 
 ```text
-sprite create <name>        Create a new sprite
-sprite use <name>           Set active sprite for current directory
-sprite list                 List all sprites
-sprite exec <cmd>           Run a command in the sprite
-sprite exec -file src:dest  Upload a file then run a command
-sprite url                  Show the sprite's public URL
+sprite create <name>              Create a new sprite
+sprite use <name>                 Set active sprite for current directory
+sprite list                       List all sprites
+sprite exec <cmd>                 Run a command in the sprite
+sprite exec -file src:dest <cmd>  Upload file(s) then run a command
+sprite console                    Open interactive shell in the sprite
+sprite url                        Show the sprite's public URL
 sprite url update --auth public   Make URL publicly accessible
-sprite checkpoint create    Snapshot current state
-sprite restore <id>         Restore a checkpoint
-sprite destroy <name>       Delete a sprite
+sprite proxy <port>               Forward a local port to the sprite
+sprite checkpoint create          Snapshot current state
+sprite checkpoint list            List checkpoints
+sprite restore <id>               Restore a checkpoint
+sprite destroy <name>             Delete a sprite
 ```
+
+### `sprite exec` Flags
+
+| Flag | Description |
+| --- | --- |
+| `-file src:dest` | Upload file before exec (repeatable) |
+| `-dir <path>` | Working directory for the command |
+| `-env KEY=val,...` | Environment variables |
+| `-tty` | Allocate a pseudo-TTY |
+
+## In-Sprite Tools (`sprite-env`)
+
+These commands run **inside** the sprite (via `sprite exec`):
+
+```text
+sprite-env info                   Show sprite name, URL, version
+sprite-env services list          List all services and their states
+sprite-env services create <name> Create a persistent service
+sprite-env services delete <name> Delete a service
+sprite-env services start <name>  Start a stopped service
+sprite-env services stop <name>   Stop a running service
+sprite-env services restart <name> Restart a service
+sprite-env services get <name>    Get a service's state
+sprite-env checkpoints            Manage checkpoints from inside
+```
+
+### `sprite-env services create` Flags
+
+| Flag | Description |
+| --- | --- |
+| `--cmd <command>` | Command to run (required, use full path) |
+| `--args <a,b,...>` | Comma-separated arguments |
+| `--env KEY=val,...` | Environment variables |
+| `--dir <path>` | Working directory |
+| `--http-port <port>` | Route HTTP traffic to this port (auto-starts on request) |
+| `--needs <svc,...>` | Service dependencies |
+| `--no-stream` | Don't tail logs after creation |
+| `--duration <time>` | How long to stream logs (default 5s) |
+
+**Only one service can have `--http-port` at a time.**
 
 ## Workflow
 
 ### 1. Check for Existing Sprite
-
-Before creating a new sprite, check if one already exists.
 
 ```bash
 sprite list
@@ -52,55 +95,72 @@ Name sprites descriptively based on the project (e.g., `landing-page`, `dashboar
 Write HTML/CSS/JS files locally first using normal file tools, then upload to the sprite using the `-file` flag on `sprite exec`.
 
 ```bash
-# Upload a single file and start the server
-sprite exec -file ./index.html:/home/sprite/index.html bash -c 'cd /home/sprite && python3 -m http.server 8080'
+# Upload a single file
+sprite exec -file ./index.html:/home/sprite/index.html echo 'uploaded'
 
 # Upload multiple files
 sprite exec \
   -file ./index.html:/home/sprite/index.html \
   -file ./style.css:/home/sprite/style.css \
-  bash -c 'cd /home/sprite && python3 -m http.server 8080'
+  echo 'uploaded'
 ```
 
-Alternatively, pipe content via `sprite exec bash -c 'cat > /path/to/file << ...'` if writing small files directly.
+### 4. Start a Persistent Service
 
-### 4. Start a Web Server
+**Always use `sprite-env services` instead of background processes or `nohup`.** Services survive hibernation and auto-restart when the sprite wakes.
 
-For static files, use Python's built-in server:
+For static files:
 
 ```bash
-sprite exec bash -c 'cd /home/sprite && nohup python3 -m http.server 8080 > /dev/null 2>&1 &'
+sprite exec bash -c 'sprite-env services create web-server \
+  --cmd /usr/bin/python3 --args "-m,http.server,8080" \
+  --dir /home/sprite --http-port 8080 --no-stream'
 ```
 
-For dev servers (Vite, Next.js, etc.), install dependencies first:
+For Node.js apps:
 
 ```bash
-sprite exec bash -c 'cd /home/sprite && npm install && npx vite --host 0.0.0.0 --port 8080'
+sprite exec bash -c 'sprite-env services create web-server \
+  --cmd /usr/bin/node --args server.js \
+  --dir /home/sprite --http-port 8080 --no-stream'
 ```
 
-The sprite routes all HTTP traffic to port 8080 automatically.
+With `--http-port`, incoming HTTP requests auto-start the service — no manual restart needed after hibernation.
+
+To check service status:
+
+```bash
+sprite exec bash -c 'sprite-env services list'
+```
+
+To restart after uploading new files (if the server doesn't hot-reload):
+
+```bash
+sprite exec bash -c 'sprite-env services restart web-server'
+```
 
 ### 5. Make the URL Public
 
 ```bash
 sprite url update --auth public
-```
-
-Then retrieve and share the URL:
-
-```bash
 sprite url
 ```
 
+Always share the URL with the user after deploying.
+
 ### 6. Iterate
 
-When updating content, upload new files and the server picks up changes automatically (for static serving). No redeploy needed.
+Upload new files — static servers pick up changes automatically:
 
 ```bash
 sprite exec -file ./index.html:/home/sprite/index.html echo 'updated'
 ```
 
-For changes that require a server restart, kill and restart the process.
+If the server needs a restart:
+
+```bash
+sprite exec bash -c 'sprite-env services restart web-server'
+```
 
 ### 7. Checkpoint (Optional)
 
@@ -118,10 +178,12 @@ sprite restore <checkpoint-id>
 
 ## Important Notes
 
-- Port 8080 is the only externally routed port
-- Sprites persist across commands and sessions (files, installed packages, running processes survive)
+- **Always use `sprite-env services`** for web servers — never `nohup` or `&` background processes, which die on hibernation
+- The `--http-port` flag enables auto-start on incoming requests — the sprite wakes AND starts the service automatically
+- Use full paths for `--cmd` (e.g., `/usr/bin/python3`, `/usr/bin/node`)
 - Sprites hibernate when idle and wake automatically on HTTP request
+- Files, packages, and services persist across sessions
+- Node.js, Python, Go, and Git are pre-installed
 - Use `sprite destroy <name>` to clean up when done
-- The sprite has Node.js, Python, Go, and Git pre-installed
-- Always make the URL public (`--auth public`) before sharing the preview link with the user
+- Always make the URL public (`--auth public`) before sharing with the user
 - When the user says "preview" or "show me", always include the sprite URL in your response
