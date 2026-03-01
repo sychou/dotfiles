@@ -11,7 +11,7 @@
 --     tokyonight-storm
 --     tokyonight-day
 --     tokyonight-moon
-local chosen_theme = "catppuccin-mocha"
+local chosen_theme = "tokyonight-night"
 
 -- Set leader key to space
 vim.g.mapleader = " "

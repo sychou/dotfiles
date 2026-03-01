@@ -30,6 +30,7 @@ map gp cd ~/Desktop/PROJECTS
 map gc cd ~/Desktop/CHOUFAM
 map gl cd ~/Desktop/LIBRARY
 map ga cd ~/Desktop/ARCHIVES
+map go cd ~/Vaults/Main
 map gC cd ~/.config
 
 # --- File Operations ---
