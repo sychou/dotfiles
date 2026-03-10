@@ -28,7 +28,8 @@ sprite proxy <port>               Forward a local port to the sprite
 sprite checkpoint create          Snapshot current state
 sprite checkpoint list            List checkpoints
 sprite restore <id>               Restore a checkpoint
-sprite destroy <name>             Delete a sprite
+sprite destroy <name>             Delete a sprite (prompts for confirmation)
+sprite destroy -force <name>      Delete a sprite without confirmation
 ```
 
 ### `sprite exec` Flags

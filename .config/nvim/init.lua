@@ -92,7 +92,7 @@ require("lazy").setup({
         build = ":TSUpdate",
         config = function()
             require('nvim-treesitter').setup {
-                ensure_installed = { "c", "lua", "vim", "python", "javascript", "html" },
+                ensure_installed = { "c", "lua", "vim", "python", "javascript", "typescript", "html", "rust", "go" },
                 sync_install = false,
                 auto_install = true,
                 highlight = {
@@ -101,6 +101,38 @@ require("lazy").setup({
                 },
             }
         end
+    },
+
+    -- LSP
+    {
+        "neovim/nvim-lspconfig",
+        dependencies = {
+            "mason-org/mason.nvim",
+            "mason-org/mason-lspconfig.nvim",
+        },
+        config = function()
+            require("mason").setup()
+            require("mason-lspconfig").setup({
+                ensure_installed = { "pyright", "ts_ls", "rust_analyzer", "gopls" },
+            })
+
+            vim.lsp.config("pyright", {})
+            vim.lsp.config("ts_ls", {})
+            vim.lsp.config("rust_analyzer", {})
+            vim.lsp.config("gopls", {})
+            vim.lsp.enable({ "pyright", "ts_ls", "rust_analyzer", "gopls" })
+
+            -- Map Ctrl-] to LSP go-to-definition
+            vim.api.nvim_create_autocmd("LspAttach", {
+                callback = function(args)
+                    local opts = { buffer = args.buf }
+                    vim.keymap.set("n", "<C-]>", vim.lsp.buf.definition, opts)
+                    vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+                    vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
+                    vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
+                end,
+            })
+        end,
     },
 
     -- CSV handling
