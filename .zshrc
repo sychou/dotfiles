@@ -152,6 +152,15 @@ venv() {
     fi
 }
 
+# --- Completions ---
+
+autoload -Uz compinit
+compinit
+
+# --- OpenClaw ---
+
+[[ -f "$HOME/.openclaw/completions/openclaw.zsh" ]] && source "$HOME/.openclaw/completions/openclaw.zsh"
+
 # --- Starship prompt ---
 
 if command_exists starship; then
