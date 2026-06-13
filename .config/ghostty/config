@@ -2,7 +2,7 @@ theme = TokyoNight
 keybind = global:ctrl+space=toggle_quick_terminal
 keybind = shift+enter=text:\n
 shell-integration-features = ssh-env
-unfocused-split-opacity = 0.50
+unfocused-split-opacity = 0.40
 term = xterm-256color
 link-url = true
 

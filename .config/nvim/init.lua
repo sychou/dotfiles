@@ -27,7 +27,7 @@ end
 
 -- Lazy package manager setup
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
     vim.fn.system({
         "git",
         "clone",
@@ -47,9 +47,6 @@ require("lazy").setup({
         name = "catppuccin",
         lazy = false,
         priority = 1000,
-        config = function()
-            apply_theme(chosen_theme)
-        end,
     },
 
     -- Status line
@@ -89,17 +86,31 @@ require("lazy").setup({
     -- Syntax highlighting
     {
         "nvim-treesitter/nvim-treesitter",
+        branch = "main",  -- master branch is archived / incompatible with nvim 0.11+
+        lazy = false,
         build = ":TSUpdate",
         config = function()
-            require('nvim-treesitter').setup {
-                ensure_installed = { "c", "lua", "vim", "python", "javascript", "typescript", "html", "rust", "go" },
-                sync_install = false,
-                auto_install = true,
-                highlight = {
-                    enable = true,
-                    additional_vim_regex_highlighting = false,
-                },
-            }
+            -- Install the parsers we use (async; skips ones already installed)
+            require('nvim-treesitter').install({
+                "c", "lua", "vim", "vimdoc", "query",
+                "markdown", "markdown_inline",
+                "python", "javascript", "typescript", "tsx",
+                "html", "rust", "go",
+            })
+
+            -- Enable treesitter highlighting + indentation per buffer once its
+            -- parser exists. On the main branch this is no longer done via a
+            -- `highlight` option.
+            vim.api.nvim_create_autocmd("FileType", {
+                callback = function(args)
+                    if pcall(vim.treesitter.start, args.buf) then
+                        -- Treesitter-based indentation (experimental; falls
+                        -- back to the default where no indents query exists).
+                        vim.bo[args.buf].indentexpr =
+                            "v:lua.require'nvim-treesitter'.indentexpr()"
+                    end
+                end,
+            })
         end
     },
 
@@ -153,6 +164,9 @@ require("lazy").setup({
 }, {
     rocks = { enabled = false },
 })
+
+-- Apply the colorscheme now that all theme plugins are loaded
+apply_theme(chosen_theme)
 
 -- Basic Neovim settings
 vim.opt.number = true
