@@ -68,6 +68,7 @@ brew install \
     tmux \
     trash \
     tree \
+    tree-sitter-cli \
     uv \
     yadm \
     yq
@@ -75,6 +76,7 @@ brew install \
 echo "[BOOTSTRAP] Installing fonts"
 brew install --cask \
     font-fira-code-nerd-font \
+    font-jetbrains-mono \
     font-jetbrains-mono-nerd-font
 
 echo "[BOOTSTRAP] Installing GUI apps"
@@ -92,7 +94,7 @@ brew install --cask \
     ghostty \
     google-chrome \
     granola \
-    handbrake \
+    handbrake-app \
     logi-options+ \
     microsoft-teams \
     monitorcontrol \
