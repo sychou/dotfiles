@@ -48,20 +48,45 @@ cmd trash %trash $fx
 map d trash
 map D trash
 
-# open text/markdown in nvim, everything else in macOS default app
-cmd open ${{
-    case $(file --mime-type -b "$f") in
-        text/*|application/json) nvim "$f" ;;
-        *) open "$f" ;;
-    esac
-}}
-
-# open selected files in nvim
+# edit selected files in nvim
 map e $nvim $fx
+
+# open with macOS default app (html → browser, etc.)
+cmd open &open "$f"
+map o open
+
+# Quick Look preview
+cmd quicklook &qlmanage -p "$f" >/dev/null 2>&1
+map Q quicklook
+
+# move / copy selection to a destination (tab-completes paths)
+cmd move-to &mv -- $fx "$1"
+cmd copy-to &cp -R -- $fx "$1"
+map M push :move-to<space>
+map C push :copy-to<space>
+
+# reveal selected file in Finder
+cmd reveal &open -R "$f"
+map R reveal
+
+# open a new Ghostty window in the current directory
+cmd terminal &open -na Ghostty --args --working-directory="$PWD"
+map t terminal
+
+# fuzzy-jump to any file/dir under cwd
+cmd fzf-jump ${{
+    res="$(fd . --hidden --exclude .git | fzf --reverse --header='jump to')"
+    [ -n "$res" ] && lf -remote "send $id select \"$res\""
+}}
+map f fzf-jump
 
 # copy full path to clipboard
 cmd yank-path $echo -n "$f" | pbcopy
 map Y yank-path
+
+# copy file contents to clipboard
+cmd yank-contents $cat "$f" | pbcopy
+map yc yank-contents
 
 # --- Archive Extraction ---
 cmd extract ${{
@@ -83,5 +108,9 @@ map x extract
 cmd on-quit &{{
     printf '%s' "$PWD" > ~/.config/lf/lastdir
 }}
+
+# --- Meta ---
+map <c-e> $nvim ~/.config/lf/lfrc
+map <c-r> source ~/.config/lf/lfrc
 
 

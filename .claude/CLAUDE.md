@@ -1,9 +1,5 @@
 # Global Claude Code Instructions
 
-You are in the following terminal environment:
-Kernel Information: Darwin 25.3.0 arm64
-Shell: zsh 5.9 (arm64-apple-darwin25.0)
-
 ## Additional CLI Tools Available
 
 - bat (better cat)
