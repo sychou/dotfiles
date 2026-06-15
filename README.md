@@ -10,10 +10,13 @@ Install NextDNS from App Store and set up with custom ID from https://my.nextdns
 
 Download Ghostty from https://ghostty.org/ and start it.
 
-Install Homebrew (and follow instructions for adding brew to environment).
+Install Homebrew, then add it to the current shell's `PATH` (the installer does
+**not** do this for you on Apple Silicon — without it the next steps can't find
+`brew`).
 
 ```
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
 Install yadm.
@@ -22,13 +25,38 @@ Install yadm.
 brew install yadm
 ```
 
-Clone my dotfiles repo and run the bootstrap.
+Clone my dotfiles repo and run the bootstrap. The repo is public, so cloning
+needs no authentication.
 
 ```
 yadm clone https://github.com/sychou/dotfiles
 ```
 
-The bootstrap script handles everything else: Homebrew packages, cask apps, fonts, mise runtimes, and Python tools.
+The bootstrap script handles everything else: Homebrew packages, cask apps,
+fonts, mise runtimes, and Python tools. (The bootstrap itself re-runs the brew
+`shellenv` step internally, so it works even on a fresh machine.)
+
+### GitHub & Commit Signing
+
+Cloning is public, but **pushing changes back requires authenticating as
+`sychou`** and commits are SSH-signed via 1Password. Set this up before making
+edits:
+
+1. Start 1Password, sign in, and enable the SSH agent:
+   **Settings → Developer → "Use the SSH agent"**. This is what serves both your
+   SSH auth keys and the commit-signing key (`gpg.format = ssh`,
+   `op-ssh-sign`). It's a per-machine toggle and is **not** restored by yadm.
+2. Authenticate GitHub as `sychou` (not any other account) and wire it into git:
+
+   ```
+   gh auth login --hostname github.com --git-protocol https --web
+   gh auth setup-git
+   ```
+
+3. Confirm the signing key is reachable: `ssh-add -l` should list your key, and a
+   test commit should show `Good "git" signature`. If signing fails with
+   "No SSH private key found", the key isn't in your 1Password Personal/Private
+   vault or the agent is off.
 
 ### Configuration
 
@@ -44,13 +72,15 @@ The bootstrap script handles everything else: Homebrew packages, cask apps, font
     - Automatically hide and show the Dock
     - Set up Internet Accounts
     - Enable iCloud > iCloud Drive > Desktop & Document Folders
-- Restore ~/.ssh files
+- SSH keys and the commit-signing key come from 1Password's SSH agent (see
+  "GitHub & Commit Signing" above) — there is no `~/.ssh/config` in this repo,
+  so add one if you want terminal SSH to route through 1Password explicitly
+- Restore any other `~/.ssh` files / secrets not held in 1Password
 
 ## Tracked Files
 
 ```
-.bash_profile
-.bashrc
+.claude/CLAUDE.md
 .config/gh/config.yml
 .config/ghostty/config
 .config/git/ignore
@@ -66,8 +96,6 @@ The bootstrap script handles everything else: Homebrew packages, cask apps, font
 .gitconfig
 .inputrc
 .nethackrc
-.profile
-.shrc
 .sqliterc
 .tmux.conf
 .vim/colors/nord.vim
@@ -79,23 +107,19 @@ README.md
 bin/fzf-preview.sh
 ```
 
-## sh, bash, and zsh
+## zsh
 
-Main shell is zsh but these configs retain backward compatibility with sh (dash), bash, and zsh.
+The shell is zsh. Two files are tracked, split by when they load:
 
-### Profile files
+- `.zprofile` — login shell config, loaded **once** per session. Sets `PATH`,
+  runs the Homebrew `shellenv`, and sources secrets from `~/.keys` (untracked —
+  restore separately).
+- `.zshrc` — interactive shell config, loaded for **every** new tab/window/shell.
+  Holds the prompt, aliases, functions, key bindings (vi mode), completions,
+  history options, and `mise` activation.
 
-- `.profile` contains the majority of login shell config
-- `.bash_profile` sources `.profile` and adds bash-specific config
-- `.zprofile` sources `.profile` and adds zsh-specific config
-
-### RC files
-
-- `.shrc` contains the majority of interactive shell config
-- `.bashrc` sources `.shrc` and adds bash-specific config
-- `.zshrc` sources `.shrc` and adds zsh-specific config
-
-Note: `.shrc` is not loaded by dash (sh) by default. If using dash, manually source it with `source .shrc`.
+`~/.keys` holds secrets and is intentionally not tracked by yadm; restore it from
+your password manager / backup on a new machine.
 
 ## Installed Packages
 
@@ -104,9 +128,11 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 - bat, better cat
 - eza, better ls
 - fd, better find
+- flyctl, Fly.io CLI
 - fzf, fuzzy finder
 - gdu, disk usage
 - gh, GitHub CLI
+- gogcli, Google Workspace CLI (`gog`)
 - git, version control
 - htop, better top
 - jless, JSON viewer
@@ -117,15 +143,18 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 - mise, runtime version manager (python, node)
 - mlx, Apple ML framework
 - mosh, better ssh
-- neovim, improved vim
 - nerdfetch, improved neofetch
+- neovim, improved vim
 - ollama, local LLM runner
 - openssl
+- poppler, PDF utilities (pdftotext, etc.)
 - ripgrep, better grep
 - starship, better prompt
 - temporal, workflow engine
 - tmux, terminal multiplexer
+- trash, safe rm (sends to macOS Trash)
 - tree, directory listing
+- tree-sitter-cli, parser generator/CLI
 - uv, Python package manager
 - yadm, dotfile manager
 - yq, YAML processor
@@ -133,15 +162,17 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 ### Fonts (Cask)
 
 - FiraCode Nerd Font
+- JetBrains Mono
 - JetBrains Mono Nerd Font
 
 ### GUI Apps (Cask)
 
-1Password, Bambu Studio, ChatGPT, Claude, CleanShot, Cursor, Discord, Docker, Google Chrome, Granola, HandBrake, Logi Options+, Microsoft Teams, MonitorControl, Notion, Obsidian, Postman, Signal, Slack, Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex, WhatsApp, Zoom
+1Password, 1Password CLI, Bambu Studio, ChatGPT, Claude, CleanShot, Cursor, Discord, Docker Desktop, Ghostty, Google Chrome, Granola, HandBrake, Logi Options+, Microsoft Teams, MonitorControl, Notion, Obsidian, Postman, Signal, Slack, Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex, WhatsApp, Zoom
 
 ### Python Tools (via uv)
 
 - tldr, better man pages
+- csvkit, CSV toolkit (in2csv, csvlook, csvgrep, etc.)
 
 ## Ghostty
 
