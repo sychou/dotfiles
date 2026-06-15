@@ -172,3 +172,6 @@ fi
 if command_exists mise; then
     eval "$(mise activate zsh)"
 fi
+
+# OpenClaw Completion
+[[ -f "$HOME/.openclaw/completions/openclaw.zsh" ]] && source "$HOME/.openclaw/completions/openclaw.zsh"
