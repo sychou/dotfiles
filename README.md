@@ -73,8 +73,9 @@ edits:
     - Set up Internet Accounts
     - Enable iCloud > iCloud Drive > Desktop & Document Folders
 - SSH keys and the commit-signing key come from 1Password's SSH agent (see
-  "GitHub & Commit Signing" above) — there is no `~/.ssh/config` in this repo,
-  so add one if you want terminal SSH to route through 1Password explicitly
+  "GitHub & Commit Signing" above). `~/.ssh/config` **is** tracked and points
+  `IdentityAgent` at the 1Password agent socket, so terminal SSH routes through
+  1Password automatically once the agent is enabled — no manual step needed
 - Restore any other `~/.ssh` files / secrets not held in 1Password
 
 ## Tracked Files
@@ -97,6 +98,7 @@ edits:
 .inputrc
 .nethackrc
 .sqliterc
+.ssh/config
 .tmux.conf
 .vim/colors/nord.vim
 .vimrc
