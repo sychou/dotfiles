@@ -95,7 +95,7 @@ brew install --cask \
     chatgpt \
     claude \
     cleanshot \
-    cursor \
+    cmux \
     discord \
     docker-desktop \
     ghostty \
@@ -107,7 +107,6 @@ brew install --cask \
     monitorcontrol \
     notion \
     obsidian \
-    postman \
     signal \
     slack \
     spotify \
