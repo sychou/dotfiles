@@ -68,6 +68,7 @@ edits:
 - Start Obsidian
     - Set up vaults via Sync
     - Place in /Users/sean/Vaults (it will automatically create a subdirectory named after vault)
+- Index notes in qmd (see [qmd — Local Note Search](#qmd--local-note-search))
 - System Settings
     - Automatically hide and show the Dock
     - Set up Internet Accounts
@@ -175,6 +176,59 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 
 - tldr, better man pages
 - csvkit, CSV toolkit (in2csv, csvlook, csvgrep, etc.)
+
+### Global npm Tools (via mise node)
+
+Not on Homebrew, so installed as global npm packages after mise sets up node:
+
+- qmd, local markdown search engine (see [qmd](#qmd--local-note-search))
+
+## qmd — Local Note Search
+
+[qmd](https://github.com/tobi/qmd) is a local, offline search engine for markdown
+(BM25 + vector + LLM re-ranking). The bootstrap installs the CLI and its Claude
+Code skill:
+
+```
+npm install -g @tobilu/qmd
+qmd skill install --global --yes -f   # skill into ~/.agents/skills/qmd (+ ~/.claude symlink)
+```
+
+First run downloads ~2GB of models into `~/.cache/qmd/models/` (one time, offline
+thereafter).
+
+### Index notes
+
+After install, add the note directories as collections and build the index. This
+is a manual post-install step (the bootstrap only prints a reminder):
+
+```
+qmd collection add ~/Vaults/Main --name obs-main             # Obsidian vault
+qmd collection add ~/.local/share/muesli/transcripts --name granola  # Granola transcripts (via muesli)
+qmd update                                                   # index files
+qmd embed                                                    # generate embeddings
+```
+
+Verify and search:
+
+```
+qmd collection list
+qmd query "what did we decide about X"
+```
+
+Re-run `qmd update && qmd embed` after notes change. Scope searches to a
+collection with `-c obs-main` or `-c granola`.
+
+### Optional: MCP server
+
+For faster, persistent access from Claude (keeps models warm across queries),
+run qmd as an HTTP MCP daemon:
+
+```
+qmd mcp --http --daemon            # localhost:8181
+```
+
+Then point Claude Code/Desktop at it (see qmd's `references/mcp-setup.md`).
 
 ## Ghostty
 

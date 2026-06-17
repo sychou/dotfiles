@@ -124,9 +124,21 @@ if command_exists mise; then
     echo "[BOOTSTRAP] Setting up python and node with mise"
     mise use --global python@3.12
     mise use --global node@latest
+    # Activate mise so the freshly installed node/npm are on PATH for the rest of this script
+    eval "$(mise activate bash)"
+    mise reshim
 else
     echo "[BOOTSTRAP] ERROR - mise installation failed"
     exit 1
+fi
+
+# Install global npm tools (require mise node)
+if command_exists npm; then
+    echo "[BOOTSTRAP] Installing qmd (local markdown search) + Claude skill"
+    npm install -g @tobilu/qmd
+    qmd skill install --global --yes -f
+else
+    echo "[BOOTSTRAP] ERROR - npm is missing (mise node setup failed?)"
 fi
 
 # Install Python tools with uv
@@ -146,3 +158,7 @@ fi
 
 echo "[BOOTSTRAP] Setup is complete."
 echo "[BOOTSTRAP] Remember to install tpm plugins in tmux <leader>I"
+echo "[BOOTSTRAP] Remember to index your notes in qmd (see README):"
+echo "[BOOTSTRAP]   qmd collection add ~/Vaults/Main --name obs-main"
+echo "[BOOTSTRAP]   qmd collection add ~/.local/share/muesli/transcripts --name granola"
+echo "[BOOTSTRAP]   qmd update && qmd embed"
