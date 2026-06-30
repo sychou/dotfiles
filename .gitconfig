@@ -18,3 +18,5 @@
 	name = Sean Chou
 	email = sean@choufam.com
 	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHt8RzjaCL40xBTmAs6uLuEcMvansgEeiTjxdgGKDpES
+[pull]
+	rebase = false
