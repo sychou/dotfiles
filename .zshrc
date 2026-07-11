@@ -32,24 +32,24 @@ fi
 
 bindkey -v
 setopt auto_cd
-cdpath=($HOME $HOME/Documents $HOME/repos)
+cdpath=($HOME $HOME/Documents $HOME/Desktop $HOME/repos)
 
 HISTFILE=~/.zsh_history
 HISTSIZE=10000
 SAVEHIST=10000
 setopt SHARE_HISTORY
-setopt APPEND_HISTORY
-setopt INC_APPEND_HISTORY
-setopt HIST_IGNORE_DUPS
+setopt EXTENDED_HISTORY
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_SPACE
 
 # --- Aliases ---
 
 alias systail='tail -f /var/log/system.log'
-alias profileme="history | awk '{print \$2}' | \
+alias profileme="history 1 | awk '{print \$2}' | \
     awk 'BEGIN{FS=\"|\"}{print \$1}' | sort | uniq -c | sort -n | \
     tail -n 20 | sort -nr"
-alias brewup='brew update; brew upgrade; brew cleanup; brew doctor'
+alias brewup='brew update && brew upgrade && brew cleanup && brew doctor'
 
 # --- Editor ---
 
@@ -69,7 +69,7 @@ if command_exists eza; then
     alias llc='lla -s created'
 else
     echo "eza not installed - https://eza.rocks"
-    alias ls='ls --color=auto -F --hyperlink'
+    alias ls='ls --color=auto -F'
     alias ll='ls -FGlh'
     alias la='ls -Fa'
     alias lla='ls -FGlha'
@@ -89,7 +89,17 @@ fi
 
 # --- grep ---
 
-export GREP_OPTIONS='--color=auto'
+alias grep='grep --color=auto'
+
+# --- Completions ---
+# Full compinit (with security audit) at most once a day; -C otherwise.
+
+autoload -Uz compinit
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+    compinit
+else
+    compinit -C
+fi
 
 # --- fzf ---
 
@@ -106,9 +116,9 @@ fi
 if command_exists fzf; then
     source <(fzf --zsh)
     alias fzp="fzf --preview 'fzf-preview.sh {}'"
-    alias fzrm="fzf --preview 'fzf-preview.sh {}' --print0 -m | xargs -0 rm"
+    alias fzrm="fzf --preview 'fzf-preview.sh {}' --print0 -m | xargs -0 trash"
     fzmv() {
-        destination="$1"
+        local destination="$1"
         if [ -z "$destination" ]; then
             echo "Usage: fzmv <destination>"
             return 1
@@ -117,9 +127,6 @@ if command_exists fzf; then
         fzf --preview 'fzf-preview.sh {}' --print0 -m | while IFS= read -r -d '' file; do
             mv -- "$file" "$destination"
         done
-    }
-    fzgadd() {
-        git add $(git status -s | fzf -m | awk '{print $2}')
     }
 fi
 
@@ -152,11 +159,6 @@ venv() {
     fi
 }
 
-# --- Completions ---
-
-autoload -Uz compinit
-compinit
-
 # --- OpenClaw ---
 
 [[ -f "$HOME/.openclaw/completions/openclaw.zsh" ]] && source "$HOME/.openclaw/completions/openclaw.zsh"
@@ -172,6 +174,3 @@ fi
 if command_exists mise; then
     eval "$(mise activate zsh)"
 fi
-
-# OpenClaw Completion
-[[ -f "$HOME/.openclaw/completions/openclaw.zsh" ]] && source "$HOME/.openclaw/completions/openclaw.zsh"
