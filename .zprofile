@@ -28,9 +28,5 @@ elif [[ -f /usr/local/bin/brew ]]; then
     eval "$(/usr/local/bin/brew shellenv)"
 fi
 
-# Keys and secrets
-if [[ -f "$HOME/.keys" ]]; then
-    . "$HOME/.keys"
-else
-    echo "No .keys were found."
-fi
+# Keys and secrets are loaded from ~/.zshenv so they also reach
+# non-interactive shells, scripts, cron, and agents.
