@@ -6,17 +6,37 @@
 # LaunchAgents, and coding agents. This is the only zsh startup file
 # that reaches them: ~/.zprofile is login-only, ~/.zshrc interactive-only.
 #
-# Note: on macOS, /etc/zprofile runs path_helper AFTER this file and
-# reshuffles PATH ordering in login shells, so this file guarantees
-# PATH *presence*, not precedence. Interactive PATH ordering belongs
-# in ~/.zprofile.
+# Step 2 of 8 in the zsh startup sequence, and the ONLY one of your own files
+# that scripts, cron, LaunchAgents and coding agents ever run. Full table of
+# which file loads when is in ~/.config/zsh/path.zsh.
+#
+# On macOS /etc/zprofile runs path_helper at step 3, AFTER this file, and
+# reshuffles PATH so system directories come first. So sourcing path.zsh here
+# guarantees PATH *presence* everywhere; ~/.zprofile re-sources it at step 4
+# to restore *precedence*. Both are needed — see that file's header.
 #
 # This file is tracked by yadm and MUST NEVER CONTAIN A SECRET.
 # Real secrets live in ~/.zshenv.local, which is deliberately untracked.
 #
 # See also: ~/.zprofile (login), ~/.zshrc (interactive), ~/.zshenv.local
 
-export PATH="/opt/homebrew/bin:$PATH"
+# Keep PATH free of duplicates. MUST come before any PATH manipulation. It
+# also makes re-sourcing path.zsh in ~/.zprofile a reorder instead of a
+# duplication, which is what lets one file define PATH for both steps.
+typeset -U path PATH
+
+# PATH lives in ~/.config/zsh/path.zsh and is sourced from here AND from
+# ~/.zprofile. Sourcing here is what puts these directories in front of
+# scripts, cron, LaunchAgents and coding agents, none of which ever run
+# ~/.zprofile. See that file's header for the full startup sequence.
+[ -r "$HOME/.config/zsh/path.zsh" ] && source "$HOME/.config/zsh/path.zsh"
+
+# Editor. Exported here rather than in ~/.zshrc so that scripts, git, cron
+# and LaunchAgents inherit it too — not only interactive shells.
+if (( $+commands[nvim] )); then
+    export EDITOR=nvim
+    export VISUAL=nvim
+fi
 
 # ---------------------------------------------------------------------------
 # Machine-specific secrets

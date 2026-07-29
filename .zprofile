@@ -5,21 +5,24 @@
 # Use for: environment variables, PATH, secrets, and other setup that
 # only needs to happen once per session.
 #
-# Not loaded for: shell scripts, non-interactive commands, or new tabs
-# in terminals that reuse an existing login session.
+# Not loaded for: shell scripts, non-interactive commands, cron, LaunchAgents,
+# coding agents, or new tabs in terminals that reuse an existing login session.
 #
-# See also: ~/.zshrc (loaded for every interactive shell)
-
-echo "Loading .zprofile"
+# Step 4 of 8 in the zsh startup sequence, and the first one to run AFTER
+# macOS reshuffles PATH via path_helper at step 3 — which is why PATH
+# ordering has to be re-asserted here. Full table in ~/.config/zsh/path.zsh.
+#
+# See also: ~/.zshrc (interactive), ~/.zshenv (every shell)
 
 # PATH
-[ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
-[ -d "$HOME/bin" ] && PATH="$HOME/bin:$PATH"
-[ -d "/opt/homebrew/opt/postgresql@17/bin" ] && PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
-[ -d "$HOME/.cargo/bin" ] && PATH="$HOME/.cargo/bin:$PATH"
-[ -d "$HOME/.bun/bin" ] && PATH="$HOME/.bun/bin:$PATH"
-[ -d "/Applications/Obsidian.app/Contents/MacOS" ] && PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
-export PATH
+#
+# Same file ~/.zshenv already sourced, deliberately sourced again. Between
+# the two, /etc/zprofile ran path_helper, which rebuilt PATH with the system
+# directories first and demoted everything set earlier. This restores the
+# intended order. `typeset -U path` (set in ~/.zshenv) makes it a reorder
+# rather than a duplication. Full explanation and the startup sequence are
+# in the header of the file itself.
+[ -r "$HOME/.config/zsh/path.zsh" ] && source "$HOME/.config/zsh/path.zsh"
 
 # Homebrew
 if [[ -f /opt/homebrew/bin/brew ]]; then

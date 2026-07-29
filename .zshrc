@@ -7,9 +7,12 @@
 #
 # Not loaded for: shell scripts (they use their own shebang).
 #
-# See also: ~/.zprofile (loaded once per login session)
-
-echo "Loading .zshrc"
+# Step 6 of 8 in the zsh startup sequence — the full table of which file
+# loads when, and for which kind of shell, is in ~/.config/zsh/path.zsh.
+#
+# Do not set PATH here. It belongs in ~/.config/zsh/path.zsh.
+#
+# See also: ~/.zprofile (login), ~/.zshenv (every shell)
 
 # --- Helper ---
 
@@ -18,14 +21,18 @@ command_exists() {
 }
 
 # --- System info ---
+# Only when stdout is a real terminal, so `zsh -ic '...'` and command
+# substitution don't capture this banner as part of their output.
 
-if command_exists nerdfetch; then
-    nerdfetch
-else
-    echo "Kernel Information: $(uname -smr)"
-    echo "Shell: $($SHELL --version)"
-    echo -ne "Uptime: "; uptime
-    echo -ne "Server time is: "; date
+if [[ -t 1 ]]; then
+    if command_exists nerdfetch; then
+        nerdfetch
+    else
+        echo "Kernel Information: $(uname -smr)"
+        echo "Shell: $($SHELL --version)"
+        echo -ne "Uptime: "; uptime
+        echo -ne "Server time is: "; date
+    fi
 fi
 
 # --- Zsh options ---
@@ -53,10 +60,11 @@ alias brewup='brew update && brew upgrade && brew cleanup && brew doctor'
 
 # --- Editor ---
 
+# EDITOR/VISUAL are exported from ~/.zshenv so non-interactive shells get
+# them too; only the interactive alias belongs here.
+
 if command_exists nvim; then
     alias vi='nvim'
-    export EDITOR=nvim
-    export VISUAL=nvim
 fi
 
 # --- eza ---
@@ -102,16 +110,7 @@ else
 fi
 
 # --- fzf ---
-
-if [ -d "/opt/homebrew/opt/fzf/bin" ]; then
-    PATH="/opt/homebrew/opt/fzf/bin:$PATH"
-    export PATH
-elif [ -d "$HOME/.fzf/bin" ]; then
-    PATH="$HOME/.fzf/bin:$PATH"
-    export PATH
-else
-    echo "fzf not found"
-fi
+# PATH entries for fzf live in ~/.zprofile; only interactive setup here.
 
 if command_exists fzf; then
     source <(fzf --zsh)
