@@ -1,1 +1,5 @@
 **/.claude/settings.local.json
+
+# Machine-local secrets, sourced by ~/.zshenv. Never tracked — anchored so it
+# only matches at a repo root, which for yadm is $HOME.
+/.zshenv.local
