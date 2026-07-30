@@ -10,6 +10,7 @@
 - gog (Google Workspace CLI — see `gog` skill for full reference)
 - muesli (Granola meeting transcripts — see `muesli` skill for full reference)
 - jq (JSON processor)
+- msgvault (personal email archive search — see `sean-email-archive` skill for full reference)
 - poppler (pdftotext and other PDF tools)
 - qmd (local markdown note search — see `qmd` skill for full reference)
 - ripgrep / rg (better grep)
@@ -30,13 +31,28 @@ Sean's files live across two first-class roots — search both (and the relevant
   - `INBOX/` — landing zone for new files; process to a home within a few days
 - **`~/Vaults/Main`** — the Obsidian vault: Sean's personal knowledge base (PKM) of notes — daily journal, people, projects, reference, writing. Has its own `CLAUDE.md`; read it when working in the vault.
 
-**qmd** is the unified search across the *markdown* notes + meetings (two indexed collections):
+### How to search
 
-- `obsidian` — the entire Obsidian vault (personal PKM)
-- `granola` — Granola transcripts (Isomer meeting notes)
-- Scope to one with `qmd search "query" -c obsidian` (or `-c granola`); see the `qmd` skill.
+Three corpora, three tools. Pick by what you're looking for — don't grep the vault by hand when qmd is indexed, and don't guess at history when the email archive has the actual record.
 
-qmd indexes only the markdown above — for `~/Desktop` documents (PDF/docx/xlsx/etc.) search the filesystem directly with `fd`/`rg` (and `poppler` for PDF text).
+| Looking for | Use | Notes |
+| ----------- | --- | ----- |
+| Notes, journal, meeting transcripts | **qmd** | Indexed. `-c obsidian` (the vault) or `-c granola` (Isomer meeting notes); omit `-c` for both. See the `qmd` skill. |
+| Email — what was said, when, by whom | **msgvault** | 1993–2008 imported (153,772 msgs), FTS + local embeddings. See the `sean-email-archive` skill. |
+| `~/Desktop` documents (PDF/docx/xlsx…) | **fd** / **rg** | Not indexed anywhere. Target the relevant subdir; `poppler` for PDF text. |
+
+Prefer `qmd query` with hand-written `intent:`/`lex:`/`vec:` fields over a bare search string — you know the domain vocabulary and the aliases below, the expansion model doesn't.
+
+**msgvault** answers questions the notes can't: first contact with a person, how a relationship actually developed, what a company was called at the time. Use `--mode hybrid` for conceptual questions and `--mode fts` when you know the exact term. Note the archive is **1993–2008 only** until the Gmail OAuth sync closes the 2009–2026 gap.
+
+### Entity aliases
+
+Names that changed over time — needed to search any of the three corpora well, since old material uses the old name:
+
+- **Fieldglass** — earlier **b2bpeople** (and `b2bpeople.com` addresses); "VMS" / "vendor management system" is the category
+- **Catalytic** — earlier **Pushbot**; "workflow automation", "no-code", "process automation"
+- **Isomer** — earlier **9root**; "insurance automation", "AI digital worker"
+- Sean's own email spans ~35 addresses across eras; the `sean-email-archive` skill has the canonical_id and era map
 
 ## Rules
 
