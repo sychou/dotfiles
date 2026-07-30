@@ -8,33 +8,46 @@ Remove all apps from Dock (personal preference).
 
 Install NextDNS from App Store and set up with custom ID from https://my.nextdns.io.
 
-Download Ghostty from https://ghostty.org/ and start it.
+You need a terminal before you have Homebrew. Either use the built-in
+Terminal.app for the next few steps, or download Ghostty from
+https://ghostty.org/ and start it.
+
+> If you install Ghostty by hand, adopt it into Homebrew afterwards rather than
+> letting the bootstrap install a second copy:
+> `brew install --cask --adopt ghostty`. The bootstrap lists `ghostty` as a
+> cask, so without `--adopt` you end up with an unmanaged app that brew will
+> never update.
 
 Install Homebrew, then add it to the current shell's `PATH` (the installer does
 **not** do this for you on Apple Silicon — without it the next steps can't find
 `brew`).
 
-```
+```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
 Install yadm.
 
-```
+```sh
 brew install yadm
 ```
 
 Clone my dotfiles repo and run the bootstrap. The repo is public, so cloning
 needs no authentication.
 
-```
+```sh
 yadm clone https://github.com/sychou/dotfiles
 ```
 
 The bootstrap script handles everything else: Homebrew packages, cask apps,
-fonts, mise runtimes, and Python tools. (The bootstrap itself re-runs the brew
-`shellenv` step internally, so it works even on a fresh machine.)
+fonts, mise runtimes, Python tools, Rust, muesli, and Claude Code. (The
+bootstrap itself re-runs the brew `shellenv` step internally, so it works even
+on a fresh machine.)
+
+**Before the first shell will work**, create `~/.zshenv.local` with this
+machine's secrets — see [Secrets](#secrets) below. Without it every new shell
+fails loudly, by design.
 
 ### GitHub & Commit Signing
 
@@ -48,7 +61,7 @@ edits:
    `op-ssh-sign`). It's a per-machine toggle and is **not** restored by yadm.
 2. Authenticate GitHub as `sychou` (not any other account) and wire it into git:
 
-   ```
+   ```sh
    gh auth login --hostname github.com --git-protocol https --web
    gh auth setup-git
    ```
@@ -58,17 +71,26 @@ edits:
    "No SSH private key found", the key isn't in your 1Password Personal/Private
    vault or the agent is off.
 
+If a commit dies with `1Password: failed to fill whole buffer` /
+`fatal: failed to write commit object`, 1Password is locked or the integration
+prompt went unanswered. Unlock it and retry. To get one commit through without
+signing, use `git -c commit.gpgsign=false commit` — this leaves your global
+config alone, but the commit will show as unverified on GitHub.
+
 ### Configuration
 
 - Start 1Password and login
-- Start Brave or Chrome
+- Start Chrome
     - Change default browser
     - Set up sync
     - Set up Kagi as default search
 - Start Obsidian
     - Set up vaults via Sync
-    - Place in /Users/sean/Vaults (it will automatically create a subdirectory named after vault)
+    - Place in `~/Vaults` (it will automatically create a subdirectory named after the vault)
 - Index notes in qmd (see [qmd — Local Note Search](#qmd--local-note-search))
+- Pull any local models you rely on — these are machine-specific and the
+  bootstrap deliberately does not install them:
+  `ollama pull nomic-embed-text` (embeddings), plus whatever chat model you want
 - System Settings
     - Automatically hide and show the Dock
     - Set up Internet Accounts
@@ -95,6 +117,7 @@ edits:
 .config/yadm/bootstrap
 .config/zed/keymap.json
 .config/zed/settings.json
+.config/zsh/path.zsh
 .gitconfig
 .inputrc
 .nethackrc
@@ -105,6 +128,7 @@ edits:
 .vimrc
 .visidatarc
 .zprofile
+.zshenv
 .zshrc
 README.md
 bin/fzf-preview.sh
@@ -112,17 +136,118 @@ bin/fzf-preview.sh
 
 ## zsh
 
-The shell is zsh. Two files are tracked, split by when they load:
+Four files are tracked. Which ones a given shell runs depends on whether it is
+a *login* shell, an *interactive* shell, both, or neither.
 
-- `.zprofile` — login shell config, loaded **once** per session. Sets `PATH`,
-  runs the Homebrew `shellenv`, and sources secrets from `~/.keys` (untracked —
-  restore separately).
-- `.zshrc` — interactive shell config, loaded for **every** new tab/window/shell.
-  Holds the prompt, aliases, functions, key bindings (vi mode), completions,
-  history options, and `mise` activation.
+| File | Runs for | Holds |
+| ---- | -------- | ----- |
+| `.zshenv` | **every** zsh, no exceptions | `typeset -U path`, sources `path.zsh`, `EDITOR`, sources secrets from `~/.zshenv.local` |
+| `.config/zsh/path.zsh` | not run directly — sourced by `.zshenv` and `.zprofile` | the single definition of `PATH` |
+| `.zprofile` | login shells only | re-sources `path.zsh`, runs Homebrew `shellenv` |
+| `.zshrc` | interactive shells only | prompt, aliases, functions, vi-mode key bindings, completions, history, `mise activate` |
 
-`~/.keys` holds secrets and is intentionally not tracked by yadm; restore it from
-your password manager / backup on a new machine.
+### Startup sequence on macOS
+
+Files run top to bottom. A shell only runs the rows whose "runs for" column
+matches it. Note that the `/etc/*` system files are interleaved with your own,
+which is where the surprise below comes from.
+
+| # | File | Runs for | Notes |
+| - | ---- | -------- | ----- |
+| 1 | `/etc/zshenv` | every zsh, no exceptions | usually absent |
+| 2 | `~/.zshenv` | every zsh, no exceptions | **sources `path.zsh`** |
+| 3 | `/etc/zprofile` | login shells only | **runs `path_helper`** |
+| 4 | `~/.zprofile` | login shells only | **sources `path.zsh`** |
+| 5 | `/etc/zshrc` | interactive shells only | |
+| 6 | `~/.zshrc` | interactive shells only | aliases, prompt, mise |
+| 7 | `/etc/zlogin` | login shells only | |
+| 8 | `~/.zlogin` | login shells only | not used here |
+
+On exit: `~/.zlogout`, then `/etc/zlogout` (login shells only).
+
+What counts as what:
+
+| Invocation | Kind | Runs |
+| ---------- | ---- | ---- |
+| Terminal tab/window | login + interactive | 1,2,3,4,5,6,7,8 |
+| `zsh` typed at a prompt | interactive | 1,2,5,6 |
+| `./script.zsh`, cron, LaunchAgent, `ssh host cmd`, coding agents (Claude Code) | neither | **1,2 only** |
+
+That last row is the one that matters. `~/.zshenv` is the only file of your own
+that automation ever runs.
+
+### Why `path.zsh` is sourced twice
+
+Two different questions have two different right answers:
+
+**"Is this directory on `PATH` at all?"** Only `~/.zshenv` (step 2) reaches
+scripts, cron, LaunchAgents and agents — `~/.zprofile` never runs for them. Miss
+this and `uv`-installed tools in `~/.local/bin` are invisible to any automation
+while working fine when you test by hand. Ask me how I know.
+
+**"In what order?"** Only `~/.zprofile` (step 4) runs *after* `path_helper`. At
+step 3 macOS rebuilds `PATH` from `/etc/paths` and `/etc/paths.d`, putting system
+directories first and appending whatever you had set. So anything step 2 puts up
+front gets demoted. Measured, with only `.zshenv` setting it:
+
+```
+ 1  /usr/local/bin
+ 3  /usr/bin
+11  /opt/homebrew/bin     <- demoted, so Apple git beats Homebrew git
+```
+
+Sourcing at step 2 answers the first question, at step 4 the second.
+
+The second pass is a **reorder, not a duplication**, because `~/.zshenv` sets
+`typeset -U path PATH` before sourcing. With the unique flag set, prepending an
+entry that already exists promotes it to the front:
+
+```
+before: /usr/bin:/bin:/opt/homebrew/bin
+after : /opt/homebrew/bin:/usr/bin:/bin
+```
+
+### Editing `path.zsh`
+
+Entries are prepended, so the list reads **lowest priority first** and the final
+`PATH` comes out in reverse of the order in the file. Add new entries at the
+bottom for high priority, at the top for low.
+
+Deliberately **not** in `path.zsh`:
+
+- **`brew shellenv`** — stays in `~/.zprofile`. It forks a subprocess and also
+  sets `MANPATH`/`INFOPATH`/`HOMEBREW_PREFIX`; worth it once per login, not on
+  every `zsh -c`. The bare `bin`/`sbin` entries are all a script actually needs.
+- **`mise activate`** — stays in `~/.zshrc`. Moving it would slow every shell. If
+  cron ever needs mise tools, add the shim directory to `path.zsh` instead.
+
+Because mise's shims are prepended in `.zshrc`, mise-managed runtimes win over
+Homebrew ones. That is why `node` resolves to mise's copy even though Homebrew
+also has one installed as an `opencode` dependency.
+
+### Secrets
+
+`~/.zshenv.local` holds this machine's real secrets. It is **never tracked** —
+`.config/git/ignore` carries an anchored `/.zshenv.local` rule so it cannot be
+staged by accident.
+
+`~/.zshenv` sources it and hard-fails if it is missing or still contains
+placeholders. Non-interactive shells `exit 1` (a hard failure for scripts, cron
+and LaunchAgents); interactive shells print the error but keep running so you
+have a usable terminal in which to fix it. On a new machine `~/.zshenv`
+generates the file with `REPLACE_ME` placeholders on first run, mode 600, and
+tells you what to fill in.
+
+Currently required:
+
+```sh
+export OPENAI_API_KEY="..."
+export OLLAMA_API_KEY="..."
+export GOG_KEYRING_PASSWORD="..."
+```
+
+To add another, append it to the `ZSHENV_REQUIRED` array in `~/.zshenv` so a
+machine missing it fails fast instead of silently misbehaving.
 
 ## Installed Packages
 
@@ -131,6 +256,7 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 - bat, better cat
 - eza, better ls
 - fd, better find
+- ffmpeg, audio/video transcoding
 - flyctl, Fly.io CLI
 - fzf, fuzzy finder
 - gdu, disk usage
@@ -143,12 +269,15 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 - lazygit, git TUI
 - lf, terminal file manager
 - lua, scripting language
-- mise, runtime version manager (python, node)
+- mise, runtime version manager
 - mlx, Apple ML framework
+- mole, port forwarding / tunnels
 - mosh, better ssh
 - nerdfetch, improved neofetch
 - neovim, improved vim
+- ntfy, push notifications from the shell
 - ollama, local LLM runner
+- opencode, terminal coding agent
 - openssl
 - poppler, PDF utilities (pdftotext, etc.)
 - ripgrep, better grep
@@ -160,6 +289,7 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 - tree-sitter-cli, parser generator/CLI
 - uv, Python package manager
 - yadm, dotfile manager
+- yazi, terminal file manager (TUI)
 - yq, YAML processor
 
 ### Fonts (Cask)
@@ -170,7 +300,21 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 
 ### GUI Apps (Cask)
 
-1Password, 1Password CLI, Bambu Studio, ChatGPT, Claude, CleanShot, Cursor, Discord, Docker Desktop, Ghostty, Google Chrome, Granola, HandBrake, Logi Options+, Microsoft Teams, MonitorControl, Notion, Obsidian, Postman, Signal, Slack, Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex, WhatsApp, Zoom
+1Password, 1Password CLI, Bambu Studio, Boop, ChatGPT, Claude, CleanShot, cmux,
+Discord, Docker Desktop, Ghostty, Google Chrome, Granola, HandBrake,
+Logi Options+, Microsoft Teams, MonitorControl, Obsidian, Signal, Slack,
+Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex,
+WhatsApp, Wispr Flow, Zoom
+
+### Mac App Store Only
+
+Not available via Homebrew — install by hand:
+
+NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari extension)
+
+### Runtimes (via mise)
+
+Set globally by the bootstrap: python 3.12, node, bun, go, pnpm.
 
 ### Python Tools (via uv)
 
@@ -183,13 +327,21 @@ Not on Homebrew, so installed as global npm packages after mise sets up node:
 
 - qmd, local markdown search engine (see [qmd](#qmd--local-note-search))
 
+### Built from Source
+
+- **muesli** — Granola transcript sync, built with cargo from
+  [sychou/muesli](https://github.com/sychou/muesli). The bootstrap installs
+  rustup first, clones to `~/repos/muesli`, then `cargo install --path`.
+- **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash`,
+  landing in `~/.local/bin/claude`.
+
 ## qmd — Local Note Search
 
 [qmd](https://github.com/tobi/qmd) is a local, offline search engine for markdown
 (BM25 + vector + LLM re-ranking). The bootstrap installs the CLI and its Claude
 Code skill:
 
-```
+```sh
 npm install -g @tobilu/qmd
 qmd skill install --global --yes -f   # skill into ~/.agents/skills/qmd (+ ~/.claude symlink)
 ```
@@ -202,29 +354,38 @@ thereafter).
 After install, add the note directories as collections and build the index. This
 is a manual post-install step (the bootstrap only prints a reminder):
 
-```
-qmd collection add ~/Vaults/Main --name obs-main             # Obsidian vault
+```sh
+qmd collection add ~/Vaults/Main --name obsidian                     # Obsidian vault
 qmd collection add ~/.local/share/muesli/transcripts --name granola  # Granola transcripts (via muesli)
-qmd update                                                   # index files
-qmd embed                                                    # generate embeddings
+qmd update                                                           # index files
+qmd embed                                                            # generate embeddings
 ```
+
+**The collection names matter.** `~/.claude/CLAUDE.md`, the vault's own
+`CLAUDE.md`, and the qmd skill all reference `-c obsidian` and `-c granola` by
+name. Name them anything else and those documented commands fail with
+`Collection not found`.
+
+Naming convention: bare **`obsidian`** always means the Main vault. If a second
+vault is ever indexed, it takes a suffix (`obsidian-work`, etc.) and `obsidian`
+stays pointed at Main — so nothing already written has to be revised.
 
 Verify and search:
 
-```
+```sh
 qmd collection list
 qmd query "what did we decide about X"
 ```
 
 Re-run `qmd update && qmd embed` after notes change. Scope searches to a
-collection with `-c obs-main` or `-c granola`.
+collection with `-c obsidian` or `-c granola`.
 
 ### Optional: MCP server
 
 For faster, persistent access from Claude (keeps models warm across queries),
 run qmd as an HTTP MCP daemon:
 
-```
+```sh
 qmd mcp --http --daemon            # localhost:8181
 ```
 
@@ -270,11 +431,9 @@ Theme switching via `:Theme <name>`.
 
 Prefix is `ctrl-a` (not the default `ctrl-b`). Status bar at the top.
 
-Plugins managed by tpm:
-- catppuccin (status bar theme, frappe flavor)
-- vim-tmux-navigator (seamless pane navigation with neovim via `ctrl+h/j/k/l`)
-
-The bootstrap clones tpm automatically but plugins need to be installed via `<prefix>I` on first run.
+**No plugin manager.** The config is plain tmux (3.6) with the status bar styled
+inline — tpm was dropped, and the bootstrap no longer clones it. The previous
+tpm-based config is kept at `~/.tmux.conf.bak` if you ever want to look back.
 
 ## Color Schemes
 
@@ -294,3 +453,6 @@ Package installation preference on Mac:
 3. uv for Python-based tools
 4. Direct when not available via brew or uv
 
+Machine-specific state — local LLM models, API keys, app logins — stays out of
+the repo on purpose. The bootstrap gets a machine to the point where those can
+be added, and no further.
