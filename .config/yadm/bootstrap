@@ -50,6 +50,7 @@ brew install \
     bat \
     eza \
     fd \
+    ffmpeg \
     flyctl \
     fzf \
     gdu \
@@ -64,10 +65,13 @@ brew install \
     lua \
     mise \
     mlx \
+    mole \
     mosh \
     nerdfetch \
     neovim \
+    ntfy \
     ollama \
+    opencode \
     openssl \
     poppler \
     ripgrep \
@@ -79,6 +83,7 @@ brew install \
     tree-sitter-cli \
     uv \
     yadm \
+    yazi \
     yq
 
 echo "[BOOTSTRAP] Installing fonts"
@@ -92,6 +97,7 @@ brew install --cask \
     1password \
     1password-cli \
     bambu-studio \
+    boop \
     chatgpt \
     claude \
     cleanshot \
@@ -105,7 +111,6 @@ brew install --cask \
     logi-options+ \
     microsoft-teams \
     monitorcontrol \
-    notion \
     obsidian \
     signal \
     slack \
@@ -117,13 +122,20 @@ brew install --cask \
     vlc \
     webex \
     whatsapp \
+    wispr-flow \
     zoom
+
+# Not available via Homebrew — install from the Mac App Store:
+#   NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari extension)
 
 # Set up python and node with mise
 if command_exists mise; then
-    echo "[BOOTSTRAP] Setting up python and node with mise"
+    echo "[BOOTSTRAP] Setting up runtimes with mise"
     mise use --global python@3.12
     mise use --global node@latest
+    mise use --global bun@latest
+    mise use --global go@latest
+    mise use --global pnpm@latest
     # Activate mise so the freshly installed node/npm are on PATH for the rest of this script
     eval "$(mise activate bash)"
     mise reshim
@@ -150,14 +162,33 @@ else
     echo "[BOOTSTRAP] ERROR - uv is missing"
 fi
 
-# Clone tpm if not already present
-if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
-    echo "[BOOTSTRAP] Cloning tpm"
-    git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+# Install Rust via rustup (needed to build muesli)
+if ! command_exists rustup; then
+    echo "[BOOTSTRAP] Installing Rust via rustup"
+    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
+fi
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
+# Build and install muesli (Granola transcript sync) from Sean's fork
+if command_exists cargo; then
+    if [ ! -d "$HOME/repos/muesli" ]; then
+        echo "[BOOTSTRAP] Cloning muesli"
+        mkdir -p "$HOME/repos"
+        git clone https://github.com/sychou/muesli.git "$HOME/repos/muesli"
+    fi
+    echo "[BOOTSTRAP] Installing muesli"
+    cargo install --path "$HOME/repos/muesli"
+else
+    echo "[BOOTSTRAP] ERROR - cargo is missing (rustup setup failed?)"
+fi
+
+# Install Claude Code (native installer)
+if ! command_exists claude; then
+    echo "[BOOTSTRAP] Installing Claude Code"
+    curl -fsSL https://claude.ai/install.sh | bash
 fi
 
 echo "[BOOTSTRAP] Setup is complete."
-echo "[BOOTSTRAP] Remember to install tpm plugins in tmux <leader>I"
 echo "[BOOTSTRAP] Remember to index your notes in qmd (see README):"
 echo "[BOOTSTRAP]   qmd collection add ~/Vaults/Main --name obs-main"
 echo "[BOOTSTRAP]   qmd collection add ~/.local/share/muesli/transcripts --name granola"
