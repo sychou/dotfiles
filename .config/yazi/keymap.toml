@@ -49,6 +49,11 @@ desc = "Go to Obsidian vault"
 
 # --- Move selection to directory ---
 #
+# Only the two flat destinations get a one-key move. PROJECTS, CHOUFAM,
+# LIBRARY, and ARCHIVES are deliberately excluded — everything in those trees
+# belongs in a subdirectory, so a root-level drop would just create a second
+# inbox. Use the `g<key>` jump and a normal x/p paste for those.
+#
 # `mv -n` never clobbers an existing file; `--orphan` detaches the process so
 # a large move doesn't freeze the UI. Note these bypass yazi's task manager,
 # so `w` won't show progress for them.
@@ -59,21 +64,6 @@ run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/INBOX/'
 desc = "Move selection to INBOX"
 
 [[mgr.prepend_keymap]]
-on   = ["M", "p"]
-run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/PROJECTS/'
-desc = "Move selection to PROJECTS"
-
-[[mgr.prepend_keymap]]
-on   = ["M", "f"]
-run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/CHOUFAM/'
-desc = "Move selection to CHOUFAM"
-
-[[mgr.prepend_keymap]]
-on   = ["M", "l"]
-run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/LIBRARY/'
-desc = "Move selection to LIBRARY"
-
-[[mgr.prepend_keymap]]
-on   = ["M", "a"]
-run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/ARCHIVES/'
-desc = "Move selection to ARCHIVES"
+on   = ["M", "D"]
+run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/'
+desc = "Move selection to Desktop"
