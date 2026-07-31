@@ -146,10 +146,15 @@ if command_exists yazi; then
 fi
 
 # --- mosh ---
+# Always point at Homebrew's mosh-server on the REMOTE host. macOS ships no
+# mosh-server, and the non-interactive login shell mosh starts there often
+# lacks /opt/homebrew/bin on PATH, so the bare `mosh host` fails.
+#
+# Note this hardcodes the Apple Silicon Homebrew prefix — override with an
+# explicit --server= when connecting to Linux (e.g. bradbury) or an Intel Mac.
 
 if command_exists mosh; then
-    alias mm="mosh --server=/opt/homebrew/bin/mosh-server mm"
-    alias mms="mosh --server=/opt/homebrew/bin/mosh-server sheldon@mm-sheldon-26"
+    alias mosh="mosh --server=/opt/homebrew/bin/mosh-server"
 fi
 
 # --- Python venv helper ---
