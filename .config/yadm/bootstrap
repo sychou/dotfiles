@@ -190,6 +190,6 @@ fi
 
 echo "[BOOTSTRAP] Setup is complete."
 echo "[BOOTSTRAP] Remember to index your notes in qmd (see README):"
-echo "[BOOTSTRAP]   qmd collection add ~/Vaults/Main --name obs-main"
+echo "[BOOTSTRAP]   qmd collection add ~/Vaults/Main --name obsidian"
 echo "[BOOTSTRAP]   qmd collection add ~/.local/share/muesli/transcripts --name granola"
 echo "[BOOTSTRAP]   qmd update && qmd embed"
