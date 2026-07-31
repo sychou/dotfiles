@@ -128,6 +128,15 @@ brew install --cask \
 # Not available via Homebrew — install from the Mac App Store:
 #   NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari extension)
 
+# Expose the Tailscale CLI bundled inside Tailscale.app. A wrapper script is
+# required — the binary refuses to run via symlink (bundle identifier check).
+if [ -d "/Applications/Tailscale.app" ]; then
+    echo "[BOOTSTRAP] Installing tailscale CLI wrapper"
+    mkdir -p "$HOME/.local/bin"
+    printf '#!/bin/sh\nexec "/Applications/Tailscale.app/Contents/MacOS/Tailscale" "$@"\n' > "$HOME/.local/bin/tailscale"
+    chmod +x "$HOME/.local/bin/tailscale"
+fi
+
 # Set up python and node with mise
 if command_exists mise; then
     echo "[BOOTSTRAP] Setting up runtimes with mise"
