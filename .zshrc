@@ -129,6 +129,22 @@ if command_exists fzf; then
     }
 fi
 
+# --- yazi ---
+# `yy` wraps yazi so quitting with `q` leaves the shell in whatever directory
+# you ended up in. Plain `yazi` still behaves normally.
+
+if command_exists yazi; then
+    yy() {
+        local tmp cwd
+        tmp="$(mktemp -t yazi-cwd.XXXXXX)"
+        yazi "$@" --cwd-file="$tmp"
+        if cwd="$(command cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+            builtin cd -- "$cwd"
+        fi
+        rm -f -- "$tmp"
+    }
+fi
+
 # --- mosh ---
 
 if command_exists mosh; then

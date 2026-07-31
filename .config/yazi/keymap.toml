@@ -1,0 +1,69 @@
+# ~/.config/yazi/keymap.toml
+#
+# Custom keybindings for yazi. These are *prepended* to the defaults, so
+# everything built in still works — `~` or F1 inside yazi lists the full set.
+#
+# Two families here:
+#   g<key>  jump to a frequent directory
+#   M<key>  move the current selection into that directory in one keystroke
+#
+# Defaults deliberately not shadowed: gg (top), gh (~), gc (~/.config),
+# gd (~/Downloads), g<Space> (cd interactive).
+
+# --- Jump to directory ---
+
+[[mgr.prepend_keymap]]
+on   = ["g", "D"]
+run  = "cd ~/Desktop"
+desc = "Go to Desktop"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "i"]
+run  = "cd ~/Desktop/INBOX"
+desc = "Go to INBOX"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "p"]
+run  = "cd ~/Desktop/PROJECTS"
+desc = "Go to PROJECTS"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "f"]
+run  = "cd ~/Desktop/CHOUFAM"
+desc = "Go to CHOUFAM"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "l"]
+run  = "cd ~/Desktop/LIBRARY"
+desc = "Go to LIBRARY"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "a"]
+run  = "cd ~/Desktop/ARCHIVES"
+desc = "Go to ARCHIVES"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "v"]
+run  = "cd ~/Vaults/Main"
+desc = "Go to Obsidian vault"
+
+# --- Move selection to directory ---
+#
+# Only the two flat destinations get a one-key move. PROJECTS, CHOUFAM,
+# LIBRARY, and ARCHIVES are deliberately excluded — everything in those trees
+# belongs in a subdirectory, so a root-level drop would just create a second
+# inbox. Use the `g<key>` jump and a normal x/p paste for those.
+#
+# `mv -n` never clobbers an existing file; `--orphan` detaches the process so
+# a large move doesn't freeze the UI. Note these bypass yazi's task manager,
+# so `w` won't show progress for them.
+
+[[mgr.prepend_keymap]]
+on   = ["M", "i"]
+run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/INBOX/'
+desc = "Move selection to INBOX"
+
+[[mgr.prepend_keymap]]
+on   = ["M", "D"]
+run  = 'shell --orphan -- mv -n "$@" "$HOME"/Desktop/'
+desc = "Move selection to Desktop"
