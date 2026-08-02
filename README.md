@@ -2,6 +2,36 @@
 
 These dotfiles are managed by [yadm](https://yadm.io/).
 
+## Machines
+
+Every machine gets the **same tracked configs and the same core CLI toolchain**.
+Only two things vary.
+
+| Host | OS | Role | GUI apps |
+| ---- | -- | ---- | -------- |
+| `verne` | macOS | daily driver + dev | all 29 |
+| `lem` | macOS | daily driver + dev; muesli sync, ollama as tailnet server | 28 (no `trezor-suite`) |
+| `tiptree` | macOS | Sheldon's box; OpenClaw (installed by hand) | 11 |
+| `wells` | Ubuntu | msgvault server + Gmail sync | opt-in |
+
+**1. GUI apps.** Always installed on macOS. On Linux it is a per-machine choice:
+
+```sh
+yadm config local.gui true
+```
+
+**2. Hostname.** Each machine's one-off role is keyed on `hostname -s` rather
+than on a class, because no two of these are alike enough to share a category.
+`lem` starts ollama as a service; `wells` runs the msgvault server; `tiptree`
+gets OpenClaw by hand.
+
+Anything not listed here — an unrecognised hostname — gets core plus GUI on
+macOS, which is the safe default.
+
+> **The bootstrap never uninstalls.** The per-machine cask lists control what
+> gets *installed*, not what gets removed. A machine that already has extra apps
+> keeps them until you `brew uninstall --cask` them yourself.
+
 ## Setting Up a New Mac
 
 Remove all apps from Dock (personal preference).
@@ -45,9 +75,12 @@ fonts, mise runtimes, Python tools, Rust, muesli, and Claude Code. (The
 bootstrap itself re-runs the brew `shellenv` step internally, so it works even
 on a fresh machine.)
 
-**Before the first shell will work**, create `~/.zshenv.local` with this
-machine's secrets — see [Secrets](#secrets) below. Without it every new shell
-fails loudly, by design.
+It picks the cask list from `hostname -s`, so **set the hostname before running
+it** — otherwise the machine gets the full base list:
+
+```sh
+sudo scutil --set LocalHostName tiptree
+```
 
 ### GitHub & Commit Signing
 
@@ -100,6 +133,26 @@ config alone, but the commit will show as unverified on GitHub.
   `IdentityAgent` at the 1Password agent socket, so terminal SSH routes through
   1Password automatically once the agent is enabled — no manual step needed
 - Restore any other `~/.ssh` files / secrets not held in 1Password
+
+## Setting Up an Ubuntu Box
+
+Same repo, same bootstrap. `yadm` is in apt, so:
+
+```sh
+sudo apt update && sudo apt install -y yadm
+yadm clone https://github.com/sychou/dotfiles
+yadm config local.gui true      # only if this box has a display
+~/.config/yadm/bootstrap
+```
+
+The bootstrap detects Linux and takes the apt path instead of Homebrew. See
+[Ubuntu package sources](#ubuntu-package-sources) for what comes from where.
+
+### Either platform: secrets first
+
+**Before the first shell will work on any machine**, create `~/.zshenv.local`
+with that machine's secrets — see [Secrets](#secrets) below. Without it every
+new shell fails loudly, by design.
 
 ## Tracked Files
 
@@ -251,7 +304,13 @@ machine missing it fails fast instead of silently misbehaving.
 
 ## Installed Packages
 
-The bootstrap script installs everything via Homebrew. Here are the key CLI tools:
+**Every machine gets the same CLI toolchain**, regardless of role. On macOS it
+comes from Homebrew; on Ubuntu the same tools come from four different places —
+see [Ubuntu package sources](#ubuntu-package-sources) below.
+
+Not installed on Ubuntu: `lazygit` and `flyctl` (Mac-only by choice), plus
+`ffmpeg`, `lf`, `mlx`, `mole`, `poppler` and `temporal` (Mac-only in practice —
+`mlx` is Apple-silicon and `mole` is a macOS cleanup app).
 
 - bat, better cat
 - eza, better ls
@@ -300,11 +359,34 @@ The bootstrap script installs everything via Homebrew. Here are the key CLI tool
 
 ### GUI Apps (Cask)
 
-1Password, 1Password CLI, Bambu Studio, Boop, ChatGPT, Claude, CleanShot, cmux,
+One base list of 29, with small per-machine exclusions. Adding an app means
+editing one array in the bootstrap; a machine opts out by name.
+
+**Base list** — what `verne` gets:
+
+1Password, 1Password CLI, Bambu Studio, Boop, ChatGPT, Claude, CleanShot,
 Discord, Docker Desktop, Ghostty, Google Chrome, Granola, HandBrake,
 Logi Options+, Microsoft Teams, MonitorControl, Obsidian, Signal, Slack,
 Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex,
 WhatsApp, Wispr Flow, Zoom
+
+**`lem`** — base minus `trezor-suite` (28).
+
+**`tiptree`** — 11. Sheldon's box, so OpenClaw is the assistant there and the
+other AI desktop apps go, along with personal comms, media and hardware
+utilities:
+
+> 1Password · 1Password CLI · CleanShot · Docker Desktop · Ghostty ·
+> Google Chrome · MonitorControl · Obsidian · Slack · Tailscale ·
+> Visual Studio Code
+
+Excluded on `tiptree`: Bambu Studio, Boop, ChatGPT, Claude, Discord, Granola,
+HandBrake, Logi Options+, Microsoft Teams, Signal, Spotify, Telegram,
+Trezor Suite, VLC, Webex, WhatsApp, Wispr Flow, Zoom.
+
+**`wells`** — no casks; Ubuntu. If given a desktop (`yadm config local.gui
+true`) it gets `ubuntu-desktop-minimal` and `vlc` from apt, and the rest —
+1Password, Chrome, Obsidian, VS Code, Ghostty — install from vendor `.deb`s.
 
 ### Mac App Store Only
 
@@ -334,6 +416,50 @@ Not on Homebrew, so installed as global npm packages after mise sets up node:
   rustup first, clones to `~/repos/muesli`, then `cargo install --path`.
 - **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash`,
   landing in `~/.local/bin/claude`.
+
+  On Ubuntu, `rustup` is not installed — nothing there needs `cargo` now that
+  `tree-sitter` comes as a release binary. Add it if you want `cargo install`
+  on that box.
+
+## Ubuntu package sources
+
+The same toolchain, but apt only has part of it. Four patterns, in dependency
+order — `ubuntu_apt` runs first because it brings `curl`, `jq`, `gnupg` and
+`unzip`, which the rest depend on.
+
+| Source | Tools |
+| ------ | ----- |
+| **apt** | git, htop, jq, mosh, ripgrep, tmux, tree, fzf, yadm, openssl |
+| **apt, renamed** | `bat`→`batcat`, `fd-find`→`fdfind`, `trash-cli`→`trash-put`, `lua5.4` |
+| **PPA** | neovim (`ppa:neovim-ppa/stable`; apt's is stale) |
+| **Vendor apt repo** | gh, eza, ntfy — these auto-update afterwards |
+| **Install script** | mise, uv, starship, opencode, ollama |
+| **GitHub release** | tree-sitter, yq, gdu, jless, yazi, gog |
+| **uv / npm** | tldr, csvkit, qmd — unchanged from macOS |
+| **Shell script** | nerdfetch |
+
+Three of those need aliases, which `.zshrc` applies behind a Linux guard:
+
+```zsh
+alias bat='batcat'; alias fd='fdfind'; alias trash='trash-put'
+```
+
+Two things to know about the release downloads:
+
+- They resolve `releases/latest` through the public GitHub API rather than
+  `gh release download`, because `gh` needs an authenticated session that a
+  fresh box does not have.
+- The asset patterns assume **x86_64**. Naming is inconsistent across those
+  projects (`linux_amd64`, `linux_x86_64`, `x86_64-unknown-linux-gnu`), so an
+  arm64 box needs each one checked individually.
+
+**Docker** installs from the official `docker-ce` repo on every Linux machine —
+not Ubuntu's `docker.io` (which lags) and not the snap (whose confinement causes
+volume-permission surprises with bind mounts).
+
+`tree-sitter-cli` is not optional: `init.lua` pins nvim-treesitter to its `main`
+branch, which requires it at 0.26.1+ and specifically says to install it from a
+package manager rather than npm. apt's is too old, hence the release binary.
 
 ## qmd — Local Note Search
 

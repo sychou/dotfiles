@@ -1,204 +1,494 @@
 #!/bin/bash
-# yadm bootstrap script for a new Mac
-
-# Function to check if a command exists
+# yadm bootstrap — macOS and Ubuntu
+#
+# Every machine gets the same core CLI toolchain and the same tracked configs.
+# Two things vary:
+#
+#   1. gui       — whether GUI apps are installed. True on macOS; on Linux it
+#                  is a per-machine choice: yadm config local.gui true
+#   2. hostname  — each machine's one-off role, below. These are deliberately
+#                  keyed on hostname rather than a class, because no two of
+#                  them are alike enough to share a category.
+#
+#   verne    macOS    daily driver + dev
+#   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet server
+#   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand)
+#   wells    Ubuntu   msgvault server + Gmail sync
+#
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-if [[ "$(uname)" != "Darwin" ]]; then
-    echo "[BOOTSTRAP] This bootstrap is for macOS only."
-    exit 1
-fi
+log() { echo "[BOOTSTRAP] $*"; }
+die() { echo "[BOOTSTRAP] ERROR - $*" >&2; exit 1; }
 
-echo "[BOOTSTRAP] macOS detected."
+# ---------------------------------------------------------------------------
+# Platform and class
+# ---------------------------------------------------------------------------
 
-# Check for Xcode CLI tools and install if not present
-if ! xcode-select -p &> /dev/null; then
-    echo "[BOOTSTRAP] Installing Xcode Command Line Tools"
-    xcode-select --install
-    until xcode-select -p &> /dev/null; do
-        sleep 5
+OS=$(uname -s)
+HOST=$(hostname -s)
+
+# GUI apps: always on macOS, opt-in on Linux.
+gui=""
+case "$OS" in
+    Darwin) gui=1 ;;
+    Linux)  [ "$(yadm config local.gui 2>/dev/null)" = "true" ] && gui=1 ;;
+esac
+
+log "os=$OS host=$HOST gui=${gui:-0}"
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+
+macos_prereqs() {
+    if ! xcode-select -p &>/dev/null; then
+        log "Installing Xcode Command Line Tools"
+        xcode-select --install
+        until xcode-select -p &>/dev/null; do sleep 5; done
+    else
+        log "Xcode Command Line Tools already installed"
+    fi
+
+    if ! command_exists brew; then
+        log "Installing Homebrew"
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+
+    # The installer does not put brew on PATH for the current shell.
+    if [[ -x /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -x /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+
+    command_exists brew || die "Homebrew installation failed"
+    brew update
+}
+
+macos_formulae() {
+    log "Installing CLI packages"
+    brew install \
+        bat \
+        eza \
+        fd \
+        ffmpeg \
+        flyctl \
+        fzf \
+        gdu \
+        gh \
+        gogcli \
+        git \
+        htop \
+        jless \
+        jq \
+        lazygit \
+        lf \
+        lua \
+        mise \
+        mlx \
+        mole \
+        mosh \
+        nerdfetch \
+        neovim \
+        ntfy \
+        ollama \
+        opencode \
+        openssl \
+        poppler \
+        ripgrep \
+        starship \
+        temporal \
+        tmux \
+        trash \
+        tree \
+        tree-sitter-cli \
+        uv \
+        yadm \
+        yazi \
+        yq
+}
+
+macos_fonts() {
+    log "Installing fonts"
+    brew install --cask \
+        font-fira-code-nerd-font \
+        font-jetbrains-mono \
+        font-jetbrains-mono-nerd-font
+}
+
+# One base list, small per-host exclusions. Adding an app means editing one
+# array; a machine opts out by name. Keeps the three Macs from drifting into
+# three independently-maintained lists.
+CASKS=(
+    1password 1password-cli bambu-studio boop chatgpt claude cleanshot
+    discord docker-desktop ghostty google-chrome granola handbrake-app
+    logi-options+ microsoft-teams monitorcontrol obsidian signal slack
+    spotify tailscale-app telegram trezor-suite visual-studio-code vlc
+    webex whatsapp wispr-flow zoom
+)
+
+macos_casks() {
+    local exclude=() keep=() c x skip
+
+    case "$HOST" in
+        lem)
+            exclude=(trezor-suite)
+            ;;
+        tiptree)
+            # Sheldon's box. OpenClaw is the assistant here, so the other AI
+            # desktop apps go; no personal comms, media, or hardware utilities.
+            exclude=(
+                trezor-suite discord signal telegram whatsapp microsoft-teams
+                webex zoom claude chatgpt boop granola wispr-flow spotify vlc
+                handbrake-app logi-options+ bambu-studio
+            )
+            ;;
+    esac
+
+    for c in "${CASKS[@]}"; do
+        skip=""
+        for x in "${exclude[@]}"; do
+            [ "$c" = "$x" ] && { skip=1; break; }
+        done
+        [ -z "$skip" ] && keep+=("$c")
     done
-else
-    echo "[BOOTSTRAP] Xcode Command Line Tools already installed"
-fi
 
-# Install Homebrew if needed
-if ! command_exists brew; then
-    echo "[BOOTSTRAP] Installing Homebrew"
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-fi
+    log "Installing GUI apps (${#keep[@]} casks for $HOST)"
+    brew install --cask "${keep[@]}"
 
-# Put brew on PATH for the rest of this script (installer does not do this for
-# the current shell). Covers Apple Silicon and Intel prefixes.
-if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ -x /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
-fi
+    # Not available via Homebrew — install from the Mac App Store:
+    #   NextDNS, Paprika Recipe Manager 3, Pixelmator Pro,
+    #   Obsidian Web Clipper (Safari extension)
+}
 
-if ! command_exists brew; then
-    echo "[BOOTSTRAP] Homebrew installation failed."
-    exit 1
-fi
-
-echo "[BOOTSTRAP] Installing/Updating packages"
-brew update
-
-brew install \
-    bat \
-    eza \
-    fd \
-    ffmpeg \
-    flyctl \
-    fzf \
-    gdu \
-    gh \
-    gogcli \
-    git \
-    htop \
-    jless \
-    jq \
-    lazygit \
-    lf \
-    lua \
-    mise \
-    mlx \
-    mole \
-    mosh \
-    nerdfetch \
-    neovim \
-    ntfy \
-    ollama \
-    opencode \
-    openssl \
-    poppler \
-    ripgrep \
-    starship \
-    temporal \
-    tmux \
-    trash \
-    tree \
-    tree-sitter-cli \
-    uv \
-    yadm \
-    yazi \
-    yq
-
-echo "[BOOTSTRAP] Installing fonts"
-brew install --cask \
-    font-fira-code-nerd-font \
-    font-jetbrains-mono \
-    font-jetbrains-mono-nerd-font
-
-echo "[BOOTSTRAP] Installing GUI apps"
-brew install --cask \
-    1password \
-    1password-cli \
-    bambu-studio \
-    boop \
-    chatgpt \
-    claude \
-    cleanshot \
-    cmux \
-    discord \
-    docker-desktop \
-    ghostty \
-    google-chrome \
-    granola \
-    handbrake-app \
-    logi-options+ \
-    microsoft-teams \
-    monitorcontrol \
-    obsidian \
-    signal \
-    slack \
-    spotify \
-    tailscale-app \
-    telegram \
-    trezor-suite \
-    visual-studio-code \
-    vlc \
-    webex \
-    whatsapp \
-    wispr-flow \
-    zoom
-
-# Not available via Homebrew — install from the Mac App Store:
-#   NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari extension)
-
-# Expose the Tailscale CLI bundled inside Tailscale.app. A wrapper script is
-# required — the binary refuses to run via symlink (bundle identifier check).
-if [ -d "/Applications/Tailscale.app" ]; then
-    echo "[BOOTSTRAP] Installing tailscale CLI wrapper"
+macos_tailscale_cli() {
+    # Expose the Tailscale CLI bundled inside Tailscale.app. A wrapper script is
+    # required — the binary refuses to run via symlink (bundle identifier check).
+    [ -d "/Applications/Tailscale.app" ] || return 0
+    log "Installing tailscale CLI wrapper"
     mkdir -p "$HOME/.local/bin"
-    printf '#!/bin/sh\nexec "/Applications/Tailscale.app/Contents/MacOS/Tailscale" "$@"\n' > "$HOME/.local/bin/tailscale"
+    printf '#!/bin/sh\nexec "/Applications/Tailscale.app/Contents/MacOS/Tailscale" "$@"\n' \
+        > "$HOME/.local/bin/tailscale"
     chmod +x "$HOME/.local/bin/tailscale"
-fi
+}
 
-# Set up python and node with mise
-if command_exists mise; then
-    echo "[BOOTSTRAP] Setting up runtimes with mise"
+# ---------------------------------------------------------------------------
+# Ubuntu
+# ---------------------------------------------------------------------------
+
+# --- apt ----------------------------------------------------------------
+
+ubuntu_apt() {
+    log "Installing apt packages"
+    sudo apt-get update
+    sudo apt-get install -y \
+        build-essential ca-certificates curl gnupg wget unzip \
+        git htop jq mosh ripgrep tmux tree fzf yadm openssl libssl-dev \
+        bat fd-find trash-cli lua5.4 \
+        unattended-upgrades
+
+    # Renamed on Debian/Ubuntu to avoid binary conflicts. .zshrc aliases
+    # bat->batcat, fd->fdfind, trash->trash-put behind a Linux guard.
+    log "Note: bat=batcat, fd=fdfind, trash=trash-put on Ubuntu"
+
+    # apt's neovim lags badly; the PPA tracks stable releases.
+    if ! command_exists nvim; then
+        log "Installing neovim from PPA"
+        sudo add-apt-repository -y ppa:neovim-ppa/stable
+        sudo apt-get update && sudo apt-get install -y neovim
+    fi
+
+    sudo dpkg-reconfigure -f noninteractive unattended-upgrades
+}
+
+# --- 2. vendor apt repos ---------------------------------------------------
+
+_add_repo() {  # name  keyurl  repoline
+    local name=$1 keyurl=$2 repoline=$3
+    [ -f "/etc/apt/keyrings/${name}.gpg" ] && return 0
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL "$keyurl" | sudo gpg --dearmor -o "/etc/apt/keyrings/${name}.gpg"
+    sudo chmod a+r "/etc/apt/keyrings/${name}.gpg"
+    echo "$repoline" | sudo tee "/etc/apt/sources.list.d/${name}.list" >/dev/null
+}
+
+ubuntu_repos() {
+    log "Adding vendor apt repositories"
+
+    # gh first — nothing else depends on it, but it is the most useful to have
+    # early if you end up debugging the release downloads by hand.
+    _add_repo githubcli \
+        "https://cli.github.com/packages/githubcli-archive-keyring.gpg" \
+        "deb [arch=${DEB_ARCH} signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main"
+
+    _add_repo gierens \
+        "https://raw.githubusercontent.com/eza-community/eza/main/deb.asc" \
+        "deb [signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main"
+
+    _add_repo heckel \
+        "https://archive.heckel.io/apt/pubkey.txt" \
+        "deb [arch=${DEB_ARCH} signed-by=/etc/apt/keyrings/heckel.gpg] https://archive.heckel.io/apt debian main"
+
+    sudo apt-get update
+    sudo apt-get install -y gh eza ntfy
+}
+
+# --- 3. install scripts ----------------------------------------------------
+
+ubuntu_scripts() {
+    command_exists mise     || { log "Installing mise";     curl -fsSL https://mise.run | sh; }
+    command_exists uv       || { log "Installing uv";       curl -LsSf https://astral.sh/uv/install.sh | sh; }
+    command_exists starship || { log "Installing starship"; curl -sS https://starship.rs/install.sh | sh -s -- -y; }
+    command_exists opencode || { log "Installing opencode"; curl -fsSL https://opencode.ai/install | bash; }
+
+    # ollama on every machine. The Linux installer registers a systemd unit at
+    # /etc/systemd/system/ollama.service, so it survives reboot without any
+    # extra work — unlike the Mac, where it is currently an orphaned process.
+    #
+    # Models are NOT pulled here; those stay machine-specific:
+    #   ollama pull nomic-embed-text
+    #
+    # GPU is opt-in and separate: NVIDIA needs CUDA drivers installed
+    # (verify with nvidia-smi), AMD needs the extra ROCm package
+    # (ollama-linux-amd64-rocm.tar.zst). Without either it runs CPU-only.
+    command_exists ollama || { log "Installing ollama"; curl -fsSL https://ollama.com/install.sh | sh; }
+
+    # nerdfetch is a single POSIX shell script, not a package
+    if [ ! -x "$BIN_DIR/nerdfetch" ]; then
+        log "Installing nerdfetch"
+        mkdir -p "$BIN_DIR"
+        curl -fsSL -o "$BIN_DIR/nerdfetch" \
+            https://raw.githubusercontent.com/ThatOneCalculator/NerdFetch/main/nerdfetch
+        chmod +x "$BIN_DIR/nerdfetch"
+    fi
+}
+
+# --- 4. GitHub releases ----------------------------------------------------
+#
+# Resolve the latest release asset through the public API rather than `gh`.
+# `gh release download` needs an authenticated gh, which a fresh box does not
+# have yet — and bootstrap should not require an interactive login. The public
+# API allows 60 requests/hour unauthenticated; this makes six.
+
+_gh_asset_url() {  # repo  regex -> prints browser_download_url
+    curl -fsSL "https://api.github.com/repos/$1/releases/latest" \
+        | jq -r --arg re "$2" '.assets[] | select(.name|test($re)) | .browser_download_url' \
+        | head -1
+}
+
+_install_release() {  # binary  repo  asset-regex  [path-inside-archive]
+    local bin=$1 repo=$2 re=$3 inner=${4:-$1}
+    command_exists "$bin" && return 0
+    local url; url=$(_gh_asset_url "$repo" "$re")
+    [ -z "$url" ] && { log "WARN - no asset matching /$re/ in $repo"; return 1; }
+
+    log "Installing $bin from $repo"
+    mkdir -p "$BIN_DIR"
+    local tmp; tmp=$(mktemp -d)
+    curl -fsSL -o "$tmp/dl" "$url"
+
+    case "$url" in
+        *.tar.gz|*.tgz) tar -xzf "$tmp/dl" -C "$tmp" ;;
+        *.zip)          unzip -qo "$tmp/dl" -d "$tmp" ;;
+        # bare gzipped binary (tree-sitter ships these) — no archive, no
+        # inner path to guess
+        *.gz)           gunzip -c "$tmp/dl" > "$tmp/$bin"; chmod +x "$tmp/$bin" ;;
+        *)              install -m755 "$tmp/dl" "$BIN_DIR/$bin"; rm -rf "$tmp"; return 0 ;;
+    esac
+
+    local found; found=$(find "$tmp" -type f -name "$inner" -perm -u+x | head -1)
+    [ -z "$found" ] && found=$(find "$tmp" -type f -name "$inner" | head -1)
+    [ -n "$found" ] && install -m755 "$found" "$BIN_DIR/$bin" \
+        || log "WARN - could not find '$inner' inside $url"
+    rm -rf "$tmp"
+}
+
+ubuntu_releases() {
+    log "Installing tools from GitHub releases"
+    # NOTE: asset regexes below assume x86_64/amd64. On arm64 these need
+    # adjusting per project — the naming is not consistent across them.
+    # tree-sitter-cli is REQUIRED by nvim-treesitter's main branch (which
+    # init.lua pins), version 0.26.1+, and upstream says to install it via a
+    # package manager rather than npm. apt's is too old, so take the release.
+    _install_release tree-sitter tree-sitter/tree-sitter    'tree-sitter-linux-x64\.gz$'
+
+    _install_release yq      mikefarah/yq                    'yq_linux_amd64$'
+    _install_release gdu     dundee/gdu                      'gdu_linux_amd64\.tgz$'      gdu_linux_amd64
+    _install_release jless   PaulJuliusMartinez/jless        'x86_64-unknown-linux-gnu\.zip$'
+    _install_release yazi    sxyazi/yazi                     'yazi-x86_64-unknown-linux-gnu\.zip$'
+    _install_release gog     openclaw/gogcli                 'linux_amd64\.tar\.gz$'
+}
+
+ubuntu_docker() {
+    command_exists docker && { log "Docker already installed"; return 0; }
+
+    # Official docker-ce repo. Ubuntu's docker.io lags badly and the snap's
+    # confinement causes volume-permission surprises with bind mounts.
+    log "Installing Docker from the official repository"
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+        | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+        | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+        docker-buildx-plugin docker-compose-plugin
+    sudo usermod -aG docker "$USER"
+    log "Added $USER to the docker group — log out and back in to take effect"
+}
+
+ubuntu_gui() {
+    # Minimal desktop for local management, not a full workstation. Adds a
+    # display stack and its update surface to a machine that is mostly reached
+    # over Tailscale SSH — worth it for sitting down at, not much more.
+    log "Installing minimal Ubuntu desktop"
+    sudo apt-get install -y ubuntu-desktop-minimal
+
+    log "Installing GUI apps available from apt"
+    sudo apt-get install -y vlc
+
+    # Everything else ships as a .deb or flatpak rather than living in apt.
+    # Add only what you actually want on this machine:
+    #   1Password    https://downloads.1password.com/linux/debian/
+    #   Chrome       https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    #   Obsidian     https://obsidian.md/download  (.deb)
+    #   VS Code      https://packages.microsoft.com/repos/code
+    #   Ghostty      https://ghostty.org/download  (Linux builds available)
+    log "Note: 1Password, Chrome, Obsidian, VS Code and Ghostty install from vendor .debs"
+}
+
+ubuntu_tailscale() {
+    command_exists tailscale && { log "Tailscale already installed"; return 0; }
+    log "Installing Tailscale"
+    curl -fsSL https://tailscale.com/install.sh | sh
+    log "Run: sudo tailscale up --ssh --advertise-tags=tag:server"
+    log "  (tag:server must already exist in the ACL policy)"
+}
+
+# ---------------------------------------------------------------------------
+# Cross-platform
+# ---------------------------------------------------------------------------
+
+common_mise() {
+    command_exists mise || die "mise is missing"
+    log "Setting up runtimes with mise"
     mise use --global python@3.12
     mise use --global node@latest
     mise use --global bun@latest
     mise use --global go@latest
     mise use --global pnpm@latest
-    # Activate mise so the freshly installed node/npm are on PATH for the rest of this script
+    # Activate so freshly installed node/npm are on PATH for the rest of this run
     eval "$(mise activate bash)"
     mise reshim
-else
-    echo "[BOOTSTRAP] ERROR - mise installation failed"
-    exit 1
-fi
+}
 
-# Install global npm tools (require mise node)
-if command_exists npm; then
-    echo "[BOOTSTRAP] Installing qmd (local markdown search) + Claude skill"
-    npm install -g @tobilu/qmd
-    qmd skill install --global --yes -f
-else
-    echo "[BOOTSTRAP] ERROR - npm is missing (mise node setup failed?)"
-fi
+common_npm() {
+    if command_exists npm; then
+        log "Installing qmd (local markdown search) + Claude skill"
+        npm install -g @tobilu/qmd
+        qmd skill install --global --yes -f
+    else
+        log "ERROR - npm is missing (mise node setup failed?)"
+    fi
+}
 
-# Install Python tools with uv
-if command_exists uv; then
-    echo "[BOOTSTRAP] Installing Python tools with uv"
-    uv tool install tldr
-    uv tool install csvkit
-else
-    echo "[BOOTSTRAP] ERROR - uv is missing"
-fi
+common_uv() {
+    if command_exists uv; then
+        log "Installing Python tools with uv"
+        uv tool install tldr
+        uv tool install csvkit
+    else
+        log "ERROR - uv is missing"
+    fi
+}
 
-# Install Rust via rustup (needed to build muesli)
-if ! command_exists rustup; then
-    echo "[BOOTSTRAP] Installing Rust via rustup"
-    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
-fi
-[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+common_claude_code() {
+    command_exists claude && return 0
+    log "Installing Claude Code"
+    curl -fsSL https://claude.ai/install.sh | bash
+}
 
-# Build and install muesli (Granola transcript sync) from Sean's fork
-if command_exists cargo; then
+# muesli syncs Granola transcripts and is only wanted where that sync runs,
+# which is a Mac. wells has no reason to hold a Granola refresh token.
+macos_muesli() {
+    if ! command_exists rustup; then
+        log "Installing Rust via rustup"
+        curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
+    fi
+    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
+    command_exists cargo || { log "ERROR - cargo is missing"; return 1; }
     if [ ! -d "$HOME/repos/muesli" ]; then
-        echo "[BOOTSTRAP] Cloning muesli"
+        log "Cloning muesli"
         mkdir -p "$HOME/repos"
         git clone https://github.com/sychou/muesli.git "$HOME/repos/muesli"
     fi
-    echo "[BOOTSTRAP] Installing muesli"
+    log "Installing muesli"
     cargo install --path "$HOME/repos/muesli"
-else
-    echo "[BOOTSTRAP] ERROR - cargo is missing (rustup setup failed?)"
-fi
+}
 
-# Install Claude Code (native installer)
-if ! command_exists claude; then
-    echo "[BOOTSTRAP] Installing Claude Code"
-    curl -fsSL https://claude.ai/install.sh | bash
-fi
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
 
-echo "[BOOTSTRAP] Setup is complete."
-echo "[BOOTSTRAP] Remember to index your notes in qmd (see README):"
-echo "[BOOTSTRAP]   qmd collection add ~/Vaults/Main --name obsidian"
-echo "[BOOTSTRAP]   qmd collection add ~/.local/share/muesli/transcripts --name granola"
-echo "[BOOTSTRAP]   qmd update && qmd embed"
+case "$OS" in
+    Darwin)
+        macos_prereqs
+        macos_formulae
+        macos_tailscale_cli
+        [ -n "$gui" ] && { macos_fonts; macos_casks; }
+        ;;
+    Linux)
+        command_exists apt-get || die "only Debian/Ubuntu is supported on Linux"
+        ubuntu_apt
+        ubuntu_repos
+        ubuntu_scripts
+        ubuntu_releases
+        ubuntu_tailscale
+        ubuntu_docker
+        [ -n "$gui" ] && ubuntu_gui
+        export PATH="$HOME/.local/bin:$PATH"
+        ;;
+    *)
+        die "unsupported OS: $OS"
+        ;;
+esac
+
+common_mise
+common_npm
+common_uv
+common_claude_code
+[ "$OS" = Darwin ] && macos_muesli
+
+# ---------------------------------------------------------------------------
+# Machine one-offs
+# ---------------------------------------------------------------------------
+
+case "$HOST" in
+    lem)
+        # ollama serves the tailnet from here; brew services gives it a plist
+        # so it survives reboot. Models stay manual: ollama pull nomic-embed-text
+        command_exists brew && brew services start ollama
+        log "lem: muesli sync runs from a tracked LaunchAgent"
+        ;;
+    tiptree)
+        log "tiptree: OpenClaw is installed by hand — see README"
+        ;;
+    wells)
+        log "wells: msgvault server — see README for the deploy sequence"
+        ;;
+esac
+
+log "Setup is complete."
+if [ "$OS" = Darwin ]; then
+    log "Remember to index your notes in qmd:"
+    log "  qmd collection add ~/Vaults/Main --name obsidian"
+    log "  qmd collection add ~/.local/share/muesli/transcripts --name granola"
+    log "  qmd update && qmd embed"
+fi
+log "Models are machine-specific and not installed here. If this box needs them:"
+log "  ollama pull nomic-embed-text"
