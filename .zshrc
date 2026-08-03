@@ -56,7 +56,20 @@ alias systail='tail -f /var/log/system.log'
 alias profileme="history 1 | awk '{print \$2}' | \
     awk 'BEGIN{FS=\"|\"}{print \$1}' | sort | uniq -c | sort -n | \
     tail -n 20 | sort -nr"
-alias brewup='brew update && brew upgrade && brew cleanup && brew doctor'
+if command_exists brew; then
+    alias brewup='brew update && brew upgrade && brew cleanup && brew doctor'
+fi
+
+# --- Debian/Ubuntu binary names ---
+
+# apt ships these under different names to avoid conflicts with older
+# packages. Alias them back so muscle memory and scripts work either way.
+
+if [[ $OSTYPE == linux* ]]; then
+    command_exists batcat    && alias bat='batcat'
+    command_exists fdfind    && alias fd='fdfind'
+    command_exists trash-put && alias trash='trash-put'
+fi
 
 # --- Editor ---
 

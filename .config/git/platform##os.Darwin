@@ -1,0 +1,12 @@
+# macOS platform paths. Included from ~/.gitconfig; yadm links the right
+# variant via `yadm alt`. Keep the [gpg "ssh"] and [credential] sections here
+# so .gitconfig itself stays portable.
+
+[credential "https://github.com"]
+	helper =
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[gpg "ssh"]
+	program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign

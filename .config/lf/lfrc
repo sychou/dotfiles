@@ -80,12 +80,12 @@ cmd fzf-jump ${{
 }}
 map f fzf-jump
 
-# copy full path to clipboard
-cmd yank-path $echo -n "$f" | pbcopy
+# copy full path to clipboard (~/bin/copy dispatches pbcopy / wl-copy / xclip)
+cmd yank-path $echo -n "$f" | copy
 map Y yank-path
 
 # copy file contents to clipboard
-cmd yank-contents $cat "$f" | pbcopy
+cmd yank-contents $cat "$f" | copy
 map yc yank-contents
 
 # --- Archive Extraction ---

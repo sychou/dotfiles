@@ -1,0 +1,14 @@
+# Linux platform paths. Included from ~/.gitconfig; yadm links the right
+# variant via `yadm alt`.
+#
+# gh comes from the vendor apt repo, so it lands in /usr/bin. 1Password's
+# Linux package installs its SSH signer at /opt/1Password/op-ssh-sign.
+
+[credential "https://github.com"]
+	helper =
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/usr/bin/gh auth git-credential
+[gpg "ssh"]
+	program = /opt/1Password/op-ssh-sign
