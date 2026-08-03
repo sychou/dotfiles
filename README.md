@@ -25,8 +25,11 @@ than on a class, because no two of these are alike enough to share a category.
 `lem` starts ollama as a service; `wells` runs the msgvault server; `tiptree`
 gets OpenClaw by hand.
 
-Anything not listed here — an unrecognised hostname — gets core plus GUI on
-macOS, which is the safe default.
+**OS detection is independent of hostname.** An unrecognised machine still
+takes the correct macOS or Ubuntu path and gets the full core toolchain — only
+the per-machine extras are skipped, and the bootstrap says so rather than
+finishing silently. On macOS it also installs the full base cask list, since
+exclusions are opt-in per host.
 
 > **The bootstrap never uninstalls.** The per-machine cask lists control what
 > gets *installed*, not what gets removed. A machine that already has extra apps

@@ -12,15 +12,34 @@
 #
 #   verne    macOS    daily driver + dev
 #   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet server
-#   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand)
+#   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand). Runs
+#                     obsidian-headless instead of the desktop app, syncing
+#                     the OpenClaw workspace as the "Sheldon" vault.
 #   wells    Ubuntu   msgvault server + Gmail sync
 #
+# Deliberately -u without -e. Bootstrap is best-effort: one package failing
+# should not abandon the other forty. But an unset variable is always a typo,
+# never a policy, and silently expanding to "" has already cost us installs.
+set -u
+
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+FAILURES=0
+MANUAL=()
+
 log() { echo "[BOOTSTRAP] $*"; }
 die() { echo "[BOOTSTRAP] ERROR - $*" >&2; exit 1; }
+# Non-fatal failure. Counted so the summary cannot claim success after a step
+# quietly gave up.
+warn() { echo "[BOOTSTRAP] WARN - $*" >&2; FAILURES=$((FAILURES + 1)); }
+
+# Anything bootstrap cannot do unattended — interactive logins, GUI installers,
+# App Store apps, machine-specific deploys. Queued here rather than logged in
+# passing, because a note 300 lines up the scrollback is a note you never read.
+# Everything queued is reprinted as a checklist at the very end of the run.
+manual() { MANUAL+=("$*"); }
 
 # ---------------------------------------------------------------------------
 # Platform and class
@@ -28,6 +47,26 @@ die() { echo "[BOOTSTRAP] ERROR - $*" >&2; exit 1; }
 
 OS=$(uname -s)
 HOST=$(hostname -s)
+
+# Every per-machine branch keys on $HOST, so a wrong answer here silently skips
+# all of them. `hostname` returns macOS's HostName, which when unset falls back
+# to a reverse-DNS lookup of the current IP — on some networks that is
+# dhcp-10-0-1-5 rather than the machine's name. LocalHostName is not used as the
+# value (it is the Bonjour name, only coincidentally equal), but disagreeing
+# with it is a reliable signal that the network has renamed us.
+if [ "$OS" = Darwin ]; then
+    _local_name=$(scutil --get LocalHostName 2>/dev/null || echo "")
+    if [ -n "$_local_name" ] && [ "$_local_name" != "$HOST" ]; then
+        # One warn, then plain logs — the continuation lines are the same single
+        # problem and must not each bump the failure count.
+        warn "hostname says '$HOST' but LocalHostName says '$_local_name'."
+        log  "  The network may have renamed this machine. Per-machine setup keys"
+        log  "  on '$HOST' and will be skipped if that is not what you expect."
+    fi
+fi
+
+# Everything not installed by a package manager lands here.
+BIN_DIR="$HOME/.local/bin"
 
 # GUI apps: always on macOS, opt-in on Linux.
 gui=""
@@ -46,14 +85,23 @@ macos_prereqs() {
     if ! xcode-select -p &>/dev/null; then
         log "Installing Xcode Command Line Tools"
         xcode-select --install
-        until xcode-select -p &>/dev/null; do sleep 5; done
+        # The install runs in a GUI dialog this script cannot see. If it is
+        # dismissed, an unbounded wait hangs bootstrap forever — cap it.
+        local waited=0
+        until xcode-select -p &>/dev/null; do
+            [ "$waited" -ge 1200 ] && die "Command Line Tools not installed after 20m — finish the dialog, then re-run"
+            sleep 5
+            waited=$((waited + 5))
+        done
     else
         log "Xcode Command Line Tools already installed"
     fi
 
     if ! command_exists brew; then
+        # NONINTERACTIVE, or the installer stops for a RETURN keypress and a
+        # sudo prompt — which defeats running this unattended on a fresh box.
         log "Installing Homebrew"
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        NONINTERACTIVE=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
 
     # The installer does not put brew on PATH for the current shell.
@@ -78,8 +126,8 @@ macos_formulae() {
         fzf \
         gdu \
         gh \
-        gogcli \
         git \
+        gogcli \
         htop \
         jless \
         jq \
@@ -90,8 +138,8 @@ macos_formulae() {
         mlx \
         mole \
         mosh \
-        nerdfetch \
         neovim \
+        nerdfetch \
         ntfy \
         ollama \
         opencode \
@@ -139,17 +187,22 @@ macos_casks() {
         tiptree)
             # Sheldon's box. OpenClaw is the assistant here, so the other AI
             # desktop apps go; no personal comms, media, or hardware utilities.
+            # obsidian is excluded in favour of obsidian-headless — this box has
+            # no one sitting at it, it just needs to push the vault to Sync.
             exclude=(
                 trezor-suite discord signal telegram whatsapp microsoft-teams
                 webex zoom claude chatgpt boop granola wispr-flow spotify vlc
-                handbrake-app logi-options+ bambu-studio
+                handbrake-app logi-options+ bambu-studio obsidian
             )
             ;;
     esac
 
     for c in "${CASKS[@]}"; do
         skip=""
-        for x in "${exclude[@]}"; do
+        # ${a[@]+"${a[@]}"} rather than plain "${exclude[@]}": macOS ships bash
+        # 3.2, where expanding an empty array under `set -u` is an unbound
+        # variable error. Hosts with no exclusions (verne) hit exactly that.
+        for x in ${exclude[@]+"${exclude[@]}"}; do
             [ "$c" = "$x" ] && { skip=1; break; }
         done
         [ -z "$skip" ] && keep+=("$c")
@@ -158,9 +211,9 @@ macos_casks() {
     log "Installing GUI apps (${#keep[@]} casks for $HOST)"
     brew install --cask "${keep[@]}"
 
-    # Not available via Homebrew — install from the Mac App Store:
-    #   NextDNS, Paprika Recipe Manager 3, Pixelmator Pro,
-    #   Obsidian Web Clipper (Safari extension)
+    manual "Install the App Store-only apps: NextDNS, Paprika Recipe Manager 3,
+      Pixelmator Pro, Obsidian Web Clipper (Safari extension).
+      See README 'Mac App Store Only'."
 }
 
 macos_tailscale_cli() {
@@ -187,6 +240,7 @@ ubuntu_apt() {
         build-essential ca-certificates curl gnupg wget unzip \
         git htop jq mosh ripgrep tmux tree fzf yadm openssl libssl-dev \
         bat fd-find trash-cli lua5.4 \
+        wl-clipboard xclip \
         unattended-upgrades
 
     # Renamed on Debian/Ubuntu to avoid binary conflicts. .zshrc aliases
@@ -216,6 +270,11 @@ _add_repo() {  # name  keyurl  repoline
 
 ubuntu_repos() {
     log "Adding vendor apt repositories"
+
+    # Both repo lines below need an explicit arch. Left empty, apt rejects the
+    # whole .list file, which then poisons every later `apt-get update` —
+    # including Docker's.
+    local DEB_ARCH; DEB_ARCH=$(dpkg --print-architecture)
 
     # gh first — nothing else depends on it, but it is the most useful to have
     # early if you end up debugging the release downloads by hand.
@@ -282,7 +341,7 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
     local bin=$1 repo=$2 re=$3 inner=${4:-$1}
     command_exists "$bin" && return 0
     local url; url=$(_gh_asset_url "$repo" "$re")
-    [ -z "$url" ] && { log "WARN - no asset matching /$re/ in $repo"; return 1; }
+    [ -z "$url" ] && { warn "no asset matching /$re/ in $repo"; return 1; }
 
     log "Installing $bin from $repo"
     mkdir -p "$BIN_DIR"
@@ -300,8 +359,16 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
 
     local found; found=$(find "$tmp" -type f -name "$inner" -perm -u+x | head -1)
     [ -z "$found" ] && found=$(find "$tmp" -type f -name "$inner" | head -1)
-    [ -n "$found" ] && install -m755 "$found" "$BIN_DIR/$bin" \
-        || log "WARN - could not find '$inner' inside $url"
+
+    # Two distinct failures, deliberately reported apart. The old
+    # `[ -n "$found" ] && install ... || warn "could not find ..."` chain fired
+    # the same message when install itself failed, sending you looking for a
+    # missing archive path when the real problem was the write.
+    if [ -z "$found" ]; then
+        warn "could not find '$inner' inside $url"
+    elif ! install -m755 "$found" "$BIN_DIR/$bin"; then
+        warn "found '$inner' but could not install it to $BIN_DIR/$bin"
+    fi
     rm -rf "$tmp"
 }
 
@@ -338,7 +405,8 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
         docker-buildx-plugin docker-compose-plugin
     sudo usermod -aG docker "$USER"
-    log "Added $USER to the docker group — log out and back in to take effect"
+    manual "Log out and back in — $USER was added to the docker group, which does
+      not apply to the current session."
 }
 
 ubuntu_gui() {
@@ -352,35 +420,49 @@ ubuntu_gui() {
     sudo apt-get install -y vlc
 
     # Everything else ships as a .deb or flatpak rather than living in apt.
-    # Add only what you actually want on this machine:
-    #   1Password    https://downloads.1password.com/linux/debian/
-    #   Chrome       https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    #   Obsidian     https://obsidian.md/download  (.deb)
-    #   VS Code      https://packages.microsoft.com/repos/code
-    #   Ghostty      https://ghostty.org/download  (Linux builds available)
-    log "Note: 1Password, Chrome, Obsidian, VS Code and Ghostty install from vendor .debs"
+    manual "Install the GUI apps that ship as vendor .debs, if this box wants them:
+      1Password  https://downloads.1password.com/linux/debian/
+      Chrome     https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      Obsidian   https://obsidian.md/download
+      VS Code    https://packages.microsoft.com/repos/code
+      Ghostty    https://ghostty.org/download
+      See README 'Setting Up an Ubuntu Box'."
 }
 
 ubuntu_tailscale() {
     command_exists tailscale && { log "Tailscale already installed"; return 0; }
     log "Installing Tailscale"
     curl -fsSL https://tailscale.com/install.sh | sh
-    log "Run: sudo tailscale up --ssh --advertise-tags=tag:server"
-    log "  (tag:server must already exist in the ACL policy)"
+    manual "Join the tailnet:  sudo tailscale up --ssh --advertise-tags=tag:server
+      (tag:server must already exist in the ACL policy)"
 }
 
 # ---------------------------------------------------------------------------
 # Cross-platform
 # ---------------------------------------------------------------------------
 
+# Runtimes are declared in the tracked .config/mise/config.toml, NOT here.
+# `mise use --global` writes to that same file, so listing them here too meant
+# bootstrap overwriting a config yadm already manages — two declarations that
+# could disagree, with whichever ran last winning. `mise install` reads the
+# tracked file and installs exactly what it declares. Add a runtime by editing
+# the config; this function needs no changes.
 common_mise() {
     command_exists mise || die "mise is missing"
-    log "Setting up runtimes with mise"
-    mise use --global python@3.12
-    mise use --global node@latest
-    mise use --global bun@latest
-    mise use --global go@latest
-    mise use --global pnpm@latest
+
+    local cfg="$HOME/.config/mise/config.toml"
+    if [ ! -f "$cfg" ]; then
+        # Without the config, `mise install` succeeds having installed nothing,
+        # and every later step that needs node or python fails far from here.
+        warn "$cfg is missing — no runtimes declared, so none will be installed."
+        manual "Restore the tracked mise config (yadm checkout .config/mise/config.toml)
+      and re-run bootstrap. Nothing that needs node, python, or go will work
+      until then."
+        return 1
+    fi
+
+    log "Installing runtimes declared in $cfg"
+    mise install
     # Activate so freshly installed node/npm are on PATH for the rest of this run
     eval "$(mise activate bash)"
     mise reshim
@@ -392,7 +474,7 @@ common_npm() {
         npm install -g @tobilu/qmd
         qmd skill install --global --yes -f
     else
-        log "ERROR - npm is missing (mise node setup failed?)"
+        warn "npm is missing (mise node setup failed?)"
     fi
 }
 
@@ -402,7 +484,7 @@ common_uv() {
         uv tool install tldr
         uv tool install csvkit
     else
-        log "ERROR - uv is missing"
+        warn "uv is missing"
     fi
 }
 
@@ -421,7 +503,7 @@ macos_muesli() {
     fi
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
-    command_exists cargo || { log "ERROR - cargo is missing"; return 1; }
+    command_exists cargo || { warn "cargo is missing"; return 1; }
     if [ ! -d "$HOME/repos/muesli" ]; then
         log "Cloning muesli"
         mkdir -p "$HOME/repos"
@@ -429,6 +511,102 @@ macos_muesli() {
     fi
     log "Installing muesli"
     cargo install --path "$HOME/repos/muesli"
+}
+
+# --- tiptree: the OpenClaw workspace as an Obsidian vault ------------------
+#
+# Sheldon's OpenClaw workspace is mirrored into Obsidian Sync as the "Sheldon"
+# vault, so the agent's working files are readable and reviewable from any
+# machine running Obsidian. tiptree gets obsidian-headless rather than the
+# desktop cask: nobody sits at this box, it only needs to move files.
+#
+# `ob login` is interactive (email, password, MFA), so it cannot run here.
+# Bootstrap detects the session and instructs instead of prompting, which keeps
+# the rest of the run unattended.
+
+OB_VAULT="Sheldon"
+OB_WORKSPACE="$HOME/.openclaw/workspace"
+OB_LABEL="md.obsidian.headless-sync"
+# The mise SHIM, deliberately — not the versioned install path. common_mise
+# runs `mise use --global node@latest` on every bootstrap, so
+# .../installs/node/<version>/bin/ob moves out from under the LaunchAgent the
+# next time node bumps. The shim survives that.
+OB_BIN="$HOME/.local/share/mise/shims/ob"
+
+tiptree_obsidian_sync_agent() {
+    local plist="$HOME/Library/LaunchAgents/${OB_LABEL}.plist"
+    log "Installing the $OB_LABEL LaunchAgent"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+
+    # WorkingDirectory is load-bearing: `ob sync` resolves which vault it is
+    # operating on from the directory it starts in.
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>             <string>${OB_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${OB_BIN}</string>
+        <string>sync</string>
+        <string>--continuous</string>
+    </array>
+    <key>WorkingDirectory</key>  <string>${OB_WORKSPACE}</string>
+    <key>RunAtLoad</key>         <true/>
+    <key>KeepAlive</key>         <true/>
+    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${OB_LABEL}.log</string>
+    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${OB_LABEL}.err</string>
+</dict>
+</plist>
+PLIST
+
+    launchctl bootout "gui/$(id -u)/${OB_LABEL}" 2>/dev/null
+    if launchctl bootstrap "gui/$(id -u)" "$plist"; then
+        log "  continuous sync running — log: ~/Library/Logs/${OB_LABEL}.log"
+    else
+        warn "could not load $OB_LABEL; check the log above"
+    fi
+}
+
+tiptree_obsidian_headless() {
+    [ -d "$OB_WORKSPACE" ] || {
+        warn "$OB_WORKSPACE not found; install OpenClaw first, then re-run"
+        return 1
+    }
+    command_exists npm || { warn "npm is missing; cannot install obsidian-headless"; return 1; }
+
+    if ! command_exists ob; then
+        log "Installing obsidian-headless (requires node >= 22)"
+        npm install -g obsidian-headless
+        # common_mise already reshimmed, but that was before this install —
+        # without a second pass there is no shim for OB_BIN to point at.
+        mise reshim
+    fi
+
+    # Cheapest authenticated call available; failure means no stored session.
+    if ! ob sync-list-remote >/dev/null 2>&1; then
+        warn "obsidian-headless is not logged in — vault sync is NOT configured."
+        manual "Log in to Obsidian Sync on $HOST, then re-run bootstrap to finish
+      linking the '$OB_VAULT' vault:
+      ob login
+      (interactive: email, password, and 2FA if enabled)"
+        return 1
+    fi
+
+    if ! ob sync-list-remote 2>/dev/null | grep -q "$OB_VAULT"; then
+        log "Creating the remote vault '$OB_VAULT'"
+        ob sync-create-remote --name "$OB_VAULT"
+    fi
+
+    # A .obsidian directory in the workspace is the marker that sync-setup has
+    # already linked this folder; running it again re-prompts for the password.
+    if [ ! -d "$OB_WORKSPACE/.obsidian" ]; then
+        log "Linking $OB_WORKSPACE to the '$OB_VAULT' vault"
+        ob sync-setup --vault "$OB_VAULT" --path "$OB_WORKSPACE"
+    fi
+
+    tiptree_obsidian_sync_agent
 }
 
 # ---------------------------------------------------------------------------
@@ -439,11 +617,20 @@ case "$OS" in
     Darwin)
         macos_prereqs
         macos_formulae
-        macos_tailscale_cli
+        # After the casks: the wrapper reads the CLI out of Tailscale.app, which
+        # does not exist until the tailscale-app cask has been installed. Called
+        # any earlier it silently no-ops on exactly the fresh machine that needs
+        # it, and only appears to work on re-runs.
         [ -n "$gui" ] && { macos_fonts; macos_casks; }
+        macos_tailscale_cli
         ;;
     Linux)
         command_exists apt-get || die "only Debian/Ubuntu is supported on Linux"
+        # BEFORE the installers, not after. ubuntu_scripts and ubuntu_releases
+        # both install into BIN_DIR and both guard on command_exists; with the
+        # export at the end of the branch those guards can never see what a
+        # previous run installed, so every re-run re-downloaded all ten tools.
+        export PATH="$BIN_DIR:$PATH"
         ubuntu_apt
         ubuntu_repos
         ubuntu_scripts
@@ -451,7 +638,6 @@ case "$OS" in
         ubuntu_tailscale
         ubuntu_docker
         [ -n "$gui" ] && ubuntu_gui
-        export PATH="$HOME/.local/bin:$PATH"
         ;;
     *)
         die "unsupported OS: $OS"
@@ -469,26 +655,78 @@ common_claude_code
 # ---------------------------------------------------------------------------
 
 case "$HOST" in
+    verne)
+        # Daily driver. Everything it needs is in the common path — the arm
+        # exists so the primary machine stops reporting itself as unrecognised.
+        log "verne: daily driver — no machine-specific setup needed"
+        ;;
     lem)
         # ollama serves the tailnet from here; brew services gives it a plist
-        # so it survives reboot. Models stay manual: ollama pull nomic-embed-text
+        # so it survives reboot.
         command_exists brew && brew services start ollama
-        log "lem: muesli sync runs from a tracked LaunchAgent"
+        manual "lem: set up the muesli sync LaunchAgent. Not yet written — muesli
+      is installed by macos_muesli, but nothing schedules the Granola sync.
+      Model it on tiptree_obsidian_sync_agent in this file."
         ;;
     tiptree)
-        log "tiptree: OpenClaw is installed by hand — see README"
+        manual "tiptree: install OpenClaw by hand — see README 'Machines'."
+        tiptree_obsidian_headless
         ;;
     wells)
-        log "wells: msgvault server — see README for the deploy sequence"
+        manual "wells: run the msgvault deploy sequence — see README 'Machines'."
+        ;;
+    *)
+        # Not a machine this repo knows about. The OS branch above already ran,
+        # so core (and on macOS the full cask list) is installed — only the
+        # per-machine extras are skipped.
+        #
+        # warn, not log: on a known machine this branch means the hostname was
+        # resolved wrong, and every per-machine step was skipped. That is the
+        # silent failure worth being loud about — a genuinely new box costs one
+        # line of noise, which is the right trade.
+        warn "No machine-specific setup for '$HOST' (known: verne, lem, tiptree, wells)"
+        log "  OS detected as $OS — core toolchain installed via the $OS path"
+        [ "$OS" = Darwin ] && log "  macOS: full base cask list installed (no exclusions)"
+        [ "$OS" = Linux ]  && log "  Linux: GUI apps skipped unless 'yadm config local.gui true'"
+        manual "'$HOST' has no machine-specific setup. If this IS a known box, the
+      hostname resolved wrong and its per-machine steps were all skipped —
+      check 'hostname -s'. If it is genuinely new, add a case arm for it in
+      the 'Machine one-offs' section of ~/.config/yadm/bootstrap."
         ;;
 esac
 
-log "Setup is complete."
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+# Queued last so they print closest to the prompt, where they will be read.
 if [ "$OS" = Darwin ]; then
-    log "Remember to index your notes in qmd:"
-    log "  qmd collection add ~/Vaults/Main --name obsidian"
-    log "  qmd collection add ~/.local/share/muesli/transcripts --name granola"
-    log "  qmd update && qmd embed"
+    manual "Index the notes in qmd:
+      qmd collection add ~/Vaults/Main --name obsidian
+      qmd collection add ~/.local/share/muesli/transcripts --name granola
+      qmd update && qmd embed
+      See README 'qmd — Local Note Search'."
 fi
-log "Models are machine-specific and not installed here. If this box needs them:"
-log "  ollama pull nomic-embed-text"
+manual "Pull any ollama models this box needs — they are machine-specific:
+      ollama pull nomic-embed-text"
+
+echo
+if [ "$FAILURES" -gt 0 ]; then
+    log "Setup finished with $FAILURES warning(s) — search the log above for 'WARN'."
+else
+    log "Setup is complete."
+fi
+
+if [ "${#MANUAL[@]}" -gt 0 ]; then
+    echo
+    echo "==========================================================================="
+    echo " MANUAL STEPS — ${#MANUAL[@]} item(s) bootstrap could not do for you"
+    echo "==========================================================================="
+    n=1
+    for step in ${MANUAL[@]+"${MANUAL[@]}"}; do
+        printf '\n%2d. %s\n' "$n" "$step"
+        n=$((n + 1))
+    done
+    echo
+    echo "==========================================================================="
+fi
