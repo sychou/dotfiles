@@ -68,6 +68,13 @@ fi
 # Everything not installed by a package manager lands here.
 BIN_DIR="$HOME/.local/bin"
 
+# Which release tag each BIN_DIR tool was installed from. Without this the
+# only "is it current?" signal is the binary's own --version, and those
+# disagree wildly in format — "Yazi 26.5.6 (aa52643 2026-05-05)" against
+# "Version:\t v5.36.1" against a bare "v0.34.1 (4747fb05)". Recording the tag
+# we installed sidesteps parsing seven different conventions.
+RELEASE_STATE="$HOME/.local/share/yadm-bootstrap/releases"
+
 # GUI apps: always on macOS, opt-in on Linux.
 gui=""
 case "$OS" in
@@ -247,11 +254,22 @@ ubuntu_apt() {
     # bat->batcat, fd->fdfind, trash->trash-put behind a Linux guard.
     log "Note: bat=batcat, fd=fdfind, trash=trash-put on Ubuntu"
 
-    # apt's neovim lags badly; the PPA tracks stable releases.
+    # apt's neovim used to lag badly, which is why this reached for the PPA.
+    # That is release-dependent now: 26.04 carries 0.11.x, and the PPA has no
+    # build for it at all. Probe before adding — a PPA that does not publish
+    # for this suite is not a missing package, it is an apt-get update error
+    # on every subsequent run.
     if ! command_exists nvim; then
-        log "Installing neovim from PPA"
-        sudo add-apt-repository -y ppa:neovim-ppa/stable
-        sudo apt-get update && sudo apt-get install -y neovim
+        local codename; codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+        if curl -fsSL -o /dev/null \
+             "https://ppa.launchpadcontent.net/neovim-ppa/stable/ubuntu/dists/${codename}/Release"; then
+            log "Installing neovim from PPA"
+            sudo add-apt-repository -y ppa:neovim-ppa/stable
+            sudo apt-get update
+        else
+            log "The neovim PPA has no build for ${codename}; using the archive"
+        fi
+        sudo apt-get install -y neovim || warn "neovim failed to install"
     fi
 
     sudo dpkg-reconfigure -f noninteractive unattended-upgrades
@@ -261,37 +279,46 @@ ubuntu_apt() {
 
 _add_repo() {  # name  keyurl  repoline
     local name=$1 keyurl=$2 repoline=$3
-    [ -f "/etc/apt/keyrings/${name}.gpg" ] && return 0
+    # A separate statement, not tacked onto the line above: bash expands every
+    # word of a `local` before running it, so ${name} there is the still-unset
+    # outer variable — an unbound-variable death under set -u.
+    local key="/etc/apt/keyrings/${name}.gpg"
+
+    # -s, not -f. A key fetch that 404s still leaves a zero-byte file behind,
+    # and treating that as "already done" wedges the repo permanently — no
+    # amount of re-running bootstrap can repair it.
+    [ -s "$key" ] && return 0
+
     sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL "$keyurl" | sudo gpg --dearmor -o "/etc/apt/keyrings/${name}.gpg"
-    sudo chmod a+r "/etc/apt/keyrings/${name}.gpg"
+    if ! curl -fsSL "$keyurl" | sudo gpg --dearmor -o "$key" || [ ! -s "$key" ]; then
+        sudo rm -f "$key"
+        warn "could not fetch the signing key for $name; skipping that repo"
+        return 1
+    fi
+    sudo chmod a+r "$key"
+
+    # Only after a good key. Writing the .list regardless would leave apt
+    # pointed at a repo it cannot verify.
     echo "$repoline" | sudo tee "/etc/apt/sources.list.d/${name}.list" >/dev/null
 }
 
 ubuntu_repos() {
     log "Adding vendor apt repositories"
 
-    # Both repo lines below need an explicit arch. Left empty, apt rejects the
+    # The repo line below needs an explicit arch. Left empty, apt rejects the
     # whole .list file, which then poisons every later `apt-get update` —
     # including Docker's.
     local DEB_ARCH; DEB_ARCH=$(dpkg --print-architecture)
 
-    # gh first — nothing else depends on it, but it is the most useful to have
-    # early if you end up debugging the release downloads by hand.
+    # Only GitHub's own repo lives here now. eza used to come from
+    # deb.gierens.de and ntfy from archive.heckel.io; both moved to
+    # ubuntu_releases — see the note there.
     _add_repo githubcli \
         "https://cli.github.com/packages/githubcli-archive-keyring.gpg" \
         "deb [arch=${DEB_ARCH} signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main"
 
-    _add_repo gierens \
-        "https://raw.githubusercontent.com/eza-community/eza/main/deb.asc" \
-        "deb [signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main"
-
-    _add_repo heckel \
-        "https://archive.heckel.io/apt/pubkey.txt" \
-        "deb [arch=${DEB_ARCH} signed-by=/etc/apt/keyrings/heckel.gpg] https://archive.heckel.io/apt debian main"
-
     sudo apt-get update
-    sudo apt-get install -y gh eza ntfy
+    sudo apt-get install -y gh || warn "gh failed to install"
 }
 
 # --- 3. install scripts ----------------------------------------------------
@@ -331,19 +358,55 @@ ubuntu_scripts() {
 # have yet — and bootstrap should not require an interactive login. The public
 # API allows 60 requests/hour unauthenticated; this makes six.
 
-_gh_asset_url() {  # repo  regex -> prints browser_download_url
-    curl -fsSL "https://api.github.com/repos/$1/releases/latest" \
-        | jq -r --arg re "$2" '.assets[] | select(.name|test($re)) | .browser_download_url' \
-        | head -1
+_release_tag_installed() {  # binary -> prints recorded tag, if any
+    [ -f "$RELEASE_STATE" ] || return 0
+    awk -v b="$1" '$1 == b { print $2; exit }' "$RELEASE_STATE"
+}
+
+_release_tag_record() {  # binary  tag
+    mkdir -p "$(dirname "$RELEASE_STATE")"
+    touch "$RELEASE_STATE"
+    local tmp; tmp=$(mktemp)
+    awk -v b="$1" '$1 != b' "$RELEASE_STATE" > "$tmp"
+    printf '%s\t%s\n' "$1" "$2" >> "$tmp"
+    sort -o "$tmp" "$tmp" && mv "$tmp" "$RELEASE_STATE"
 }
 
 _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
     local bin=$1 repo=$2 re=$3 inner=${4:-$1}
-    command_exists "$bin" && return 0
-    local url; url=$(_gh_asset_url "$repo" "$re")
+
+    # One API call, both facts. Asking separately for the tag and the asset
+    # URL would double the request count against a 60/hour budget.
+    local json
+    if ! json=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest"); then
+        # Offline, or rate-limited. An already-installed tool is not a failure
+        # worth counting — it just does not get upgraded on this run.
+        if command_exists "$bin"; then
+            log "Could not reach the GitHub API for $repo; keeping the installed $bin"
+            return 0
+        fi
+        warn "could not reach the GitHub API for $repo, and $bin is not installed"
+        return 1
+    fi
+
+    local tag; tag=$(printf '%s' "$json" | jq -r '.tag_name // empty')
+    local url; url=$(printf '%s' "$json" \
+        | jq -r --arg re "$re" '.assets[]? | select(.name|test($re)) | .browser_download_url' \
+        | head -1)
     [ -z "$url" ] && { warn "no asset matching /$re/ in $repo"; return 1; }
 
-    log "Installing $bin from $repo"
+    # Upgrade when the published tag has moved on. A tool installed before this
+    # state file existed has no recorded tag, so it reinstalls once and is
+    # tracked from then on.
+    if command_exists "$bin" && [ -n "$tag" ] && [ "$(_release_tag_installed "$bin")" = "$tag" ]; then
+        return 0
+    fi
+
+    if command_exists "$bin"; then
+        log "Updating $bin to $tag from $repo"
+    else
+        log "Installing $bin $tag from $repo"
+    fi
     mkdir -p "$BIN_DIR"
     local tmp; tmp=$(mktemp -d)
     curl -fsSL -o "$tmp/dl" "$url"
@@ -354,7 +417,12 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
         # bare gzipped binary (tree-sitter ships these) — no archive, no
         # inner path to guess
         *.gz)           gunzip -c "$tmp/dl" > "$tmp/$bin"; chmod +x "$tmp/$bin" ;;
-        *)              install -m755 "$tmp/dl" "$BIN_DIR/$bin"; rm -rf "$tmp"; return 0 ;;
+        *)              if install -m755 "$tmp/dl" "$BIN_DIR/$bin"; then
+                            _release_tag_record "$bin" "$tag"
+                        else
+                            warn "could not install $bin to $BIN_DIR/$bin"
+                        fi
+                        rm -rf "$tmp"; return 0 ;;
     esac
 
     local found; found=$(find "$tmp" -type f -name "$inner" -perm -u+x | head -1)
@@ -368,6 +436,10 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
         warn "could not find '$inner' inside $url"
     elif ! install -m755 "$found" "$BIN_DIR/$bin"; then
         warn "found '$inner' but could not install it to $BIN_DIR/$bin"
+    else
+        # Only on a confirmed write. Recording the tag after a failed install
+        # would make the next run believe $bin is already current.
+        _release_tag_record "$bin" "$tag"
     fi
     rm -rf "$tmp"
 }
@@ -386,6 +458,14 @@ ubuntu_releases() {
     _install_release jless   PaulJuliusMartinez/jless        'x86_64-unknown-linux-gnu\.zip$'
     _install_release yazi    sxyazi/yazi                     'yazi-x86_64-unknown-linux-gnu\.zip$'
     _install_release gog     openclaw/gogcli                 'linux_amd64\.tar\.gz$'
+
+    # Both were apt packages until the repos stopped being the better source.
+    # ntfy's (archive.heckel.io) is gone outright — pubkey and dists/ both 404
+    # as of 2026-08. eza's (deb.gierens.de) still works, but it is a
+    # community-maintained repackaging; these tarballs are what eza itself
+    # publishes, so this is the more direct source, not a fallback.
+    _install_release eza     eza-community/eza               'eza_x86_64-unknown-linux-gnu\.tar\.gz$'
+    _install_release ntfy    binwiederhier/ntfy              'linux_amd64\.tar\.gz$'
 }
 
 ubuntu_docker() {
@@ -407,6 +487,37 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
     sudo usermod -aG docker "$USER"
     manual "Log out and back in — $USER was added to the docker group, which does
       not apply to the current session."
+}
+
+ubuntu_unattended_vendors() {
+    # Ubuntu's shipped Allowed-Origins covers ${distro_id} only, so every
+    # vendor repo below — tailscale, docker, gh — gets security updates just
+    # when someone remembers to run `apt upgrade`. On a box reachable over the
+    # tailnet that runs unattended for weeks, that is the wrong default.
+    #
+    # A drop-in rather than an edit to 50unattended-upgrades: that file is a
+    # dpkg conffile, so a package upgrade prompts about local modifications.
+    # Origins-Pattern is additive across apt.conf.d, and matching on origin=
+    # alone avoids depending on a Suite field that Tailscale does not publish
+    # (it sets Codename but no Suite, so the "Origin:Suite" shorthand cannot
+    # match it).
+    log "Extending unattended-upgrades to the vendor repositories"
+    sudo tee /etc/apt/apt.conf.d/51unattended-upgrades-vendors >/dev/null <<'EOF'
+// Managed by yadm bootstrap. Vendor repos are not covered by the
+// distro-only Allowed-Origins list in 50unattended-upgrades.
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Docker";
+    "origin=Tailscale";
+    "origin=gh";
+};
+EOF
+
+    # Reject a malformed drop-in here rather than discovering it the next time
+    # a security update silently does not land.
+    if ! apt-config dump >/dev/null 2>&1; then
+        sudo rm -f /etc/apt/apt.conf.d/51unattended-upgrades-vendors
+        warn "the unattended-upgrades drop-in did not parse; removed it"
+    fi
 }
 
 ubuntu_gui() {
@@ -433,8 +544,67 @@ ubuntu_tailscale() {
     command_exists tailscale && { log "Tailscale already installed"; return 0; }
     log "Installing Tailscale"
     curl -fsSL https://tailscale.com/install.sh | sh
-    manual "Join the tailnet:  sudo tailscale up --ssh --advertise-tags=tag:server
-      (tag:server must already exist in the ACL policy)"
+
+    # wells doubles as the tailnet's exit node, so its join advertises that
+    # up front rather than needing a second `tailscale set` later. The
+    # forwarding sysctls it depends on are handled in the wells one-off arm.
+    local flags="--ssh --advertise-tags=tag:server"
+    [ "$HOST" = wells ] && flags="$flags --advertise-exit-node"
+    manual "Join the tailnet:  sudo tailscale up $flags
+      (tag:server must already exist in the ACL policy. For SSH to work the
+      policy also needs an 'ssh' rule whose dst includes tag:server —
+      without one, tailscale up warns that nobody can access this device.)"
+}
+
+# Exit-node duty needs the kernel forwarding packets for other machines.
+# Both families: without the IPv6 sysctl, IPv6-destined traffic from tailnet
+# clients dies quietly while IPv4 works — a miserable thing to debug. A
+# sysctl.d drop-in rather than a live `sysctl -w`, so it survives reboot.
+ubuntu_exit_node_tuning() {
+    log "Enabling IP forwarding for exit-node duty"
+    sudo tee /etc/sysctl.d/99-tailscale.conf >/dev/null <<'EOF'
+# Managed by yadm bootstrap: this machine is a Tailscale exit node.
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
+EOF
+    sudo sysctl -q -p /etc/sysctl.d/99-tailscale.conf \
+        || warn "could not apply the forwarding sysctls"
+
+    # UDP GRO forwarding: tailscaled warns about this on `up` and it measurably
+    # improves forwarded-UDP (i.e. WireGuard relay) throughput. ethtool settings
+    # do not survive reboot, so a oneshot unit reapplies them at boot. The
+    # logic lives in a script rather than inline in ExecStart= — systemd does
+    # its own $-expansion and backslash handling on that line, which silently
+    # mangles shell variables and sed escapes. The NIC is detected at runtime,
+    # so a hardware change does not leave the tuning pointed at a dead
+    # interface. Best-effort — some drivers mark these features [fixed].
+    log "Enabling UDP GRO forwarding for exit-node throughput"
+    sudo tee /usr/local/sbin/tailscale-udp-gro >/dev/null <<'EOF'
+#!/bin/sh
+# Managed by yadm bootstrap: UDP GRO tuning for Tailscale exit-node duty.
+# See https://tailscale.com/s/ethtool-config-udp-gro
+dev=$(ip -o route get 8.8.8.8 | sed -n 's/.* dev \([^ ]*\).*/\1/p')
+[ -n "$dev" ] || exit 0
+ethtool -K "$dev" rx-udp-gro-forwarding on rx-gro-list off || true
+EOF
+    sudo chmod +x /usr/local/sbin/tailscale-udp-gro
+    sudo tee /etc/systemd/system/tailscale-udp-gro.service >/dev/null <<'EOF'
+# Managed by yadm bootstrap: UDP GRO tuning for Tailscale exit-node duty.
+[Unit]
+Description=Enable UDP GRO forwarding on the default-route NIC for Tailscale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tailscale-udp-gro
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now tailscale-udp-gro.service \
+        || warn "could not enable the UDP GRO tuning service"
 }
 
 # ---------------------------------------------------------------------------
@@ -637,6 +807,8 @@ case "$OS" in
         ubuntu_releases
         ubuntu_tailscale
         ubuntu_docker
+        # After both, so the origins it allows are ones that now exist.
+        ubuntu_unattended_vendors
         [ -n "$gui" ] && ubuntu_gui
         ;;
     *)
@@ -673,6 +845,14 @@ case "$HOST" in
         tiptree_obsidian_headless
         ;;
     wells)
+        ubuntu_exit_node_tuning
+        # Advertising is only half of it — traffic routes nowhere until the
+        # node is approved. If the join above already happened without the
+        # flag, `tailscale set` adds it without disturbing the session.
+        manual "Approve wells as an exit node in the Tailscale admin console
+      (Machines -> wells -> Edit route settings), or add an autoApprovers
+      rule for tag:server. If wells joined without the flag, first run:
+      sudo tailscale set --advertise-exit-node"
         manual "wells: run the msgvault deploy sequence — see README 'Machines'."
         ;;
     *)
