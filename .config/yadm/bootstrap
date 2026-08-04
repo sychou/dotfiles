@@ -259,7 +259,7 @@ ubuntu_apt() {
     sudo apt-get install -y \
         build-essential ca-certificates curl gnupg wget unzip \
         git htop jq mosh ripgrep tmux tree fzf yadm openssl libssl-dev \
-        bat fd-find trash-cli lua5.4 \
+        bat fd-find trash-cli lua5.4 zsh \
         wl-clipboard xclip \
         unattended-upgrades
 
@@ -627,6 +627,44 @@ EOF
 # Cross-platform
 # ---------------------------------------------------------------------------
 
+# Every machine runs zsh. The tracked shell config — aliases, PATH, mise
+# activation, starship, secrets — is all zsh; a box left on bash silently
+# gets none of it. wells ran bash for a year and every alias and runtime
+# lookup quietly broke there. macOS has shipped zsh as the default since
+# Catalina, so this is a no-op on the Macs unless an account was switched.
+common_zsh() {
+    command_exists zsh || { warn "zsh is not installed; login shell left unchanged"; return 1; }
+    local zsh_path; zsh_path=$(command -v zsh)
+
+    local current=""
+    if [ "$OS" = Darwin ]; then
+        current=$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')
+    else
+        current=$(getent passwd "$USER" | cut -d: -f7)
+    fi
+    # Any zsh counts — /bin/zsh, /usr/bin/zsh, a brew one. Re-pointing between
+    # them is churn, not correctness.
+    case "$current" in */zsh) return 0 ;; esac
+
+    log "Switching login shell to $zsh_path (was ${current:-unknown})"
+    # chsh refuses a shell not listed in /etc/shells. The Ubuntu package and
+    # macOS both register theirs; this covers an unusual install location.
+    grep -qx "$zsh_path" /etc/shells 2>/dev/null \
+        || echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
+    # sudo chsh, not bare chsh: run as the user it prompts for a password,
+    # which defeats an unattended bootstrap.
+    if sudo chsh -s "$zsh_path" "$USER"; then
+        manual "Login shell changed to zsh — log out and back in for it to apply.
+      First login sources ~/.zshenv, which hard-fails if ~/.zshenv.local is
+      missing or still has REPLACE_ME placeholders — fill it in if prompted."
+    else
+        warn "could not change the login shell to zsh"
+        manual "Switch the login shell to zsh by hand:  chsh -s $zsh_path
+      (bootstrap tried 'sudo chsh' and it failed.)"
+        return 1
+    fi
+}
+
 # Runtimes are declared in the tracked .config/mise/config.toml, NOT here.
 # `mise use --global` writes to that same file, so listing them here too meant
 # bootstrap overwriting a config yadm already manages — two declarations that
@@ -868,6 +906,7 @@ case "$OS" in
         ;;
 esac
 
+common_zsh
 common_mise
 common_npm
 common_uv
