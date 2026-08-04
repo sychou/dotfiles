@@ -242,6 +242,18 @@ macos_tailscale_cli() {
 # --- apt ----------------------------------------------------------------
 
 ubuntu_apt() {
+    # The Ubuntu archives over plain HTTP are unreachable from some networks —
+    # wells' path filters port 80 to Canonical's mirrors specifically (https to
+    # the same hosts answers instantly, and other http sites work fine). The
+    # installer writes http:// sources, so every fetch from the main archive —
+    # including unattended security upgrades — fails silently until switched.
+    # The archives serve both schemes; https is the one that works everywhere.
+    local sources=/etc/apt/sources.list.d/ubuntu.sources
+    if [ -f "$sources" ] && grep -q 'http://' "$sources"; then
+        log "Switching the Ubuntu archive sources to https"
+        sudo sed -i 's|http://|https://|g' "$sources"
+    fi
+
     log "Installing apt packages"
     sudo apt-get update
     sudo apt-get install -y \
