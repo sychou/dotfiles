@@ -11,7 +11,8 @@
 #                  them are alike enough to share a category.
 #
 #   verne    macOS    daily driver + dev
-#   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet server
+#   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet server,
+#                     tailnet exit node (the second, alongside wells)
 #   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand). Runs
 #                     obsidian-headless instead of the desktop app, syncing
 #                     the OpenClaw workspace as the "Sheldon" vault.
@@ -331,7 +332,8 @@ ubuntu_scripts() {
 
     # ollama on every machine. The Linux installer registers a systemd unit at
     # /etc/systemd/system/ollama.service, so it survives reboot without any
-    # extra work — unlike the Mac, where it is currently an orphaned process.
+    # extra work; macOS gets the equivalent from brew services in
+    # common_ollama, which also pulls the shared cloud models on both OSes.
     #
     # Models are NOT pulled here; those stay machine-specific:
     #   ollama pull nomic-embed-text
@@ -545,9 +547,11 @@ ubuntu_tailscale() {
     log "Installing Tailscale"
     curl -fsSL https://tailscale.com/install.sh | sh
 
-    # wells doubles as the tailnet's exit node, so its join advertises that
-    # up front rather than needing a second `tailscale set` later. The
-    # forwarding sysctls it depends on are handled in the wells one-off arm.
+    # wells is one of the tailnet's two exit nodes (lem is the other, but lem
+    # is macOS and never reaches this function — its arm handles it), so its
+    # join advertises that up front rather than needing a second `tailscale
+    # set` later. The forwarding sysctls it depends on are handled in the
+    # wells one-off arm.
     local flags="--ssh --advertise-tags=tag:server"
     [ "$HOST" = wells ] && flags="$flags --advertise-exit-node"
     manual "Join the tailnet:  sudo tailscale up $flags
@@ -662,6 +666,42 @@ common_claude_code() {
     command_exists claude && return 0
     log "Installing Claude Code"
     curl -fsSL https://claude.ai/install.sh | bash
+}
+
+# Every machine gets the same cloud models — they run on ollama.com, so a
+# pull is metadata-only and costs nothing locally. Local models are the
+# opposite: machine-specific by design (what fits lem's GPU has no business
+# on wells), so they are never pulled here — see the summary note.
+OLLAMA_CLOUD_MODELS="mistral-large-3:675b-cloud gemma4:31b-cloud glm-5.2:cloud"
+
+common_ollama() {
+    command_exists ollama || { warn "ollama is missing"; return 1; }
+
+    # The installers only put the binary in place. Linux's registers a systemd
+    # unit that starts on its own; on macOS brew services gives it a plist so
+    # it survives reboot instead of running as an orphaned process. Guarded,
+    # because `brew services start` errors on an already-running service.
+    if [ "$OS" = Darwin ]; then
+        if ! brew services info ollama --json 2>/dev/null | jq -e '.[0].running' >/dev/null 2>&1; then
+            log "Starting ollama via brew services"
+            brew services start ollama || warn "could not start the ollama service"
+        fi
+    fi
+
+    # Best-effort: pulls fail when the account is not signed in yet (or the
+    # server has not finished starting), and signin is interactive — so the
+    # fallback is a manual step, not a warning.
+    local m failed=""
+    for m in $OLLAMA_CLOUD_MODELS; do
+        ollama pull "$m" >/dev/null 2>&1 || failed="$failed $m"
+    done
+    if [ -n "$failed" ]; then
+        local cmds=""
+        for m in $failed; do cmds="$cmds
+      ollama pull $m"; done
+        manual "Sign in to ollama.com so this box sees the shared cloud models:
+      ollama signin$cmds"
+    fi
 }
 
 # muesli syncs Granola transcripts and is only wanted where that sync runs,
@@ -820,6 +860,7 @@ common_mise
 common_npm
 common_uv
 common_claude_code
+common_ollama
 [ "$OS" = Darwin ] && macos_muesli
 
 # ---------------------------------------------------------------------------
@@ -833,12 +874,21 @@ case "$HOST" in
         log "verne: daily driver — no machine-specific setup needed"
         ;;
     lem)
-        # ollama serves the tailnet from here; brew services gives it a plist
-        # so it survives reboot.
-        command_exists brew && brew services start ollama
+        # The ollama service itself now starts everywhere via common_ollama.
+        # What stays lem-specific is the tailnet-server role: other machines
+        # point at lem for the local models only it holds.
         manual "lem: set up the muesli sync LaunchAgent. Not yet written — muesli
       is installed by macos_muesli, but nothing schedules the Granola sync.
       Model it on tiptree_obsidian_sync_agent in this file."
+        # lem is the tailnet's second exit node. On macOS the Tailscale app
+        # does its own packet forwarding, so none of the sysctl/ethtool tuning
+        # wells needs applies here — advertising and admin-console approval
+        # are the whole job.
+        manual "lem: advertise as an exit node:
+      tailscale set --advertise-exit-node
+      (or Tailscale menu bar -> Settings -> 'Run exit node'), then approve it
+      in the admin console (Machines -> lem -> Edit route settings), or add an
+      autoApprovers rule covering it."
         ;;
     tiptree)
         manual "tiptree: install OpenClaw by hand — see README 'Machines'."
@@ -887,7 +937,9 @@ if [ "$OS" = Darwin ]; then
       qmd update && qmd embed
       See README 'qmd — Local Note Search'."
 fi
-manual "Pull any ollama models this box needs — they are machine-specific:
+manual "Pull any local ollama models this box needs — local models are
+      machine-specific by design (cloud models are shared and handled by
+      common_ollama):
       ollama pull nomic-embed-text"
 
 echo
