@@ -17,6 +17,15 @@ local chosen_theme = "tokyonight-night"
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+-- mise-managed runtimes (node, go, python) sit behind shims that only
+-- interactive zsh puts on PATH. nvim may be launched from bash, cron, or a
+-- GUI, and Mason needs npm/go to install LSP servers — so add them here.
+local mise_shims = vim.fn.expand("~/.local/share/mise/shims")
+if vim.fn.isdirectory(mise_shims) == 1
+    and not string.find(vim.env.PATH or "", mise_shims, 1, true) then
+    vim.env.PATH = mise_shims .. ":" .. (vim.env.PATH or "")
+end
+
 -- Theme switching function
 function _G.apply_theme(theme)
     local ok, err = pcall(vim.cmd, "colorscheme " .. theme)
@@ -123,15 +132,31 @@ require("lazy").setup({
         },
         config = function()
             require("mason").setup()
+
+            -- Only set up servers whose install toolchain exists on this
+            -- machine, so Mason doesn't error at startup on hosts without
+            -- node/go (rust_analyzer is a prebuilt binary — no toolchain).
+            local server_needs = {
+                { name = "pyright", needs = "npm" },
+                { name = "ts_ls", needs = "npm" },
+                { name = "rust_analyzer" },
+                { name = "gopls", needs = "go" },
+            }
+            local servers = {}
+            for _, s in ipairs(server_needs) do
+                if s.needs == nil or vim.fn.executable(s.needs) == 1 then
+                    table.insert(servers, s.name)
+                end
+            end
+
             require("mason-lspconfig").setup({
-                ensure_installed = { "pyright", "ts_ls", "rust_analyzer", "gopls" },
+                ensure_installed = servers,
             })
 
-            vim.lsp.config("pyright", {})
-            vim.lsp.config("ts_ls", {})
-            vim.lsp.config("rust_analyzer", {})
-            vim.lsp.config("gopls", {})
-            vim.lsp.enable({ "pyright", "ts_ls", "rust_analyzer", "gopls" })
+            for _, name in ipairs(servers) do
+                vim.lsp.config(name, {})
+            end
+            vim.lsp.enable(servers)
 
             -- Map Ctrl-] to LSP go-to-definition
             vim.api.nvim_create_autocmd("LspAttach", {

@@ -12,6 +12,12 @@
 # Entries are PREPENDED, so this list reads LOWEST priority first: add at the
 # bottom for high priority, at the top for low.
 
+# mise shims: node/go/python for the shells that never run `mise activate`
+# (that hook lives in ~/.zshrc, interactive-only). Scripts, cron, agents, and
+# anything they launch — nvim's Mason, notably — resolve runtimes through
+# these. Interactive shells still win: activate prepends the real tool paths.
+[ -d "$HOME/.local/share/mise/shims" ] && PATH="$HOME/.local/share/mise/shims:$PATH"
+
 [ -d "$HOME/.local/bin" ]          && PATH="$HOME/.local/bin:$PATH"
 [ -d "$HOME/bin" ]                 && PATH="$HOME/bin:$PATH"
 [ -d "$HOME/.cargo/bin" ]          && PATH="$HOME/.cargo/bin:$PATH"
