@@ -10,10 +10,13 @@
 #                  keyed on hostname rather than a class, because no two of
 #                  them are alike enough to share a category.
 #
-#   verne    macOS    daily driver + dev; muesli sync (the laptop travels, so
-#                     the Granola pull runs where Granola is actually used)
-#   lem      macOS    daily driver + dev; ollama as tailnet server,
-#                     tailnet exit node (the second, alongside wells)
+#   verne    macOS    daily driver + dev; muesli sync
+#   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet
+#                     server, tailnet exit node (the second, alongside wells)
+#
+#                     Both Macs run the Granola pull and share the result
+#                     through Obsidian Sync, so either one alone keeps the
+#                     transcripts current.
 #   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand). Runs
 #                     obsidian-headless instead of the desktop app, syncing
 #                     the OpenClaw workspace as the "Sheldon" vault.
@@ -775,31 +778,37 @@ macos_muesli() {
     cargo install --path "$HOME/repos/muesli"
 }
 
-# --- verne: scheduled Granola transcript sync -------------------------------
+# --- verne and lem: scheduled Granola transcript sync -----------------------
 #
 # muesli pulls Granola transcripts to ~/.local/share/muesli/transcripts, which
 # qmd indexes as its `granola` collection.
 #
-# On verne rather than lem, despite lem being the always-on box. muesli
-# auto-detects its auth from the Granola desktop app, so the pull has to run
-# somewhere Granola is installed and logged in — and a stale token on a machine
-# you rarely look at fails silently, leaving searches quietly empty. verne is
-# the machine Granola is actually used on, so a broken login is obvious the same
-# day. Nothing waits on this job, so uptime buys less than freshness does:
-# launchd runs a missed StartInterval on wake, which covers a sleeping laptop.
+# BOTH machines run it, and the transcript directory is an Obsidian-synced
+# vault, so whichever machine is awake does the pull and the other picks the
+# files up. That covers the two failure modes a single writer could not: verne
+# travelling and lem being asleep or unreachable. Either box alone keeps the
+# collection current.
 #
-# Deliberately ONE writer. muesli is idempotent against the Granola API, but a
-# second machine writing the same files into a synced folder only produces
-# conflict copies. macos_muesli still installs the binary everywhere, so any Mac
-# can run `muesli sync` by hand if verne is lost.
+# Two writers is safe here specifically because both pull from the same Granola
+# API and write byte-identical files — Obsidian Sync only forks a file when the
+# two sides genuinely differ. muesli's DuckDB index and its models stay
+# machine-local and are NOT synced; only transcripts/ belongs in the vault.
+# Syncing the database would put two machines' derived state in conflict.
+#
+# Both need the Granola desktop app installed and logged in — muesli
+# auto-detects its auth from it, and a signed-out machine fails silently,
+# leaving searches quietly empty. tiptree excludes the Granola cask, which is
+# why it is not in this list.
 
 MUESLI_LABEL="com.sychou.muesli-sync"
 MUESLI_BIN="$HOME/.cargo/bin/muesli"
 # Every 30 minutes. Granola needs a moment to process a call after it ends, so
-# tighter than this mostly polls an API that has nothing new yet.
+# tighter than this mostly polls an API that has nothing new yet. The two
+# machines drift out of phase on their own — the interval counts from load,
+# and they boot at different times — so they rarely pull simultaneously.
 MUESLI_INTERVAL=1800
 
-verne_muesli_sync_agent() {
+macos_muesli_sync_agent() {
     [ -x "$MUESLI_BIN" ] || { warn "$MUESLI_BIN not found — macos_muesli did not complete"; return 1; }
 
     local plist="$HOME/Library/LaunchAgents/${MUESLI_LABEL}.plist"
@@ -987,14 +996,15 @@ common_ollama
 
 case "$HOST" in
     verne)
-        # The travelling machine, so it owns the Granola pull.
-        verne_muesli_sync_agent
+        # Either Mac may do the Granola pull; the other picks the transcripts
+        # up through Obsidian Sync. See the muesli block above.
+        macos_muesli_sync_agent
         ;;
     lem)
         # The ollama service itself now starts everywhere via common_ollama.
         # What stays lem-specific is the tailnet-server role: other machines
         # point at lem for the local models only it holds.
-        log "lem: muesli is installed but not scheduled — verne owns the sync"
+        macos_muesli_sync_agent
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
         # wells needs applies here — advertising and admin-console approval
