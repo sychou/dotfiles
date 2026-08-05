@@ -656,8 +656,9 @@ common_zsh() {
     # which defeats an unattended bootstrap.
     if sudo chsh -s "$zsh_path" "$USER"; then
         manual "Login shell changed to zsh — log out and back in for it to apply.
-      First login sources ~/.zshenv, which hard-fails if ~/.zshenv.local is
-      missing or still has REPLACE_ME placeholders — fill it in if prompted."
+      First login sources ~/.zshenv, which creates ~/.zshenv.local with
+      REPLACE_ME placeholders if it is missing and warns until they are filled
+      in. Shells still work meanwhile; only what needs those keys fails."
     else
         warn "could not change the login shell to zsh"
         manual "Switch the login shell to zsh by hand:  chsh -s $zsh_path

@@ -42,13 +42,20 @@ fi
 # Machine-specific secrets
 #
 # ~/.zshenv.local is created per machine by hand and never synced. If it is
-# missing, it is generated here with placeholders and the shell fails, so a
-# machine can never run silently without its secrets. Placeholder values that
-# were never filled in fail the same way.
+# missing, it is generated here with placeholders and the shell warns loudly,
+# so a machine can never run silently without its secrets. Placeholder values
+# that were never filled in warn the same way.
 #
-# Non-interactive shells exit(1) — a hard failure for scripts, cron and
-# LaunchAgents. Interactive shells report the error but keep running, so you
-# still have a usable terminal in which to fix the file.
+# WARN, not exit. This used to exit(1) for non-interactive shells, which was a
+# worse trade than it looked: nothing here is needed before login, but Tailscale
+# SSH runs the login shell from the passwd entry, so a freshly bootstrapped box
+# would refuse every `ssh host 'cmd'`, cron job and LaunchAgent — with no output
+# — until someone sat down at it and filled in three keys. A missing key should
+# break the one command that wants it, not the whole machine.
+#
+# This block is deliberately LAST in the file: the `return` below aborts the
+# rest of ~/.zshenv, and there is no rest, so PATH and everything else are
+# already set regardless.
 # ---------------------------------------------------------------------------
 
 typeset -g ZSHENV_LOCAL=${HOME}/.zshenv.local
@@ -61,16 +68,18 @@ if [[ ! -r $ZSHENV_LOCAL ]]; then
       print '# ~/.zshenv.local — machine-specific secrets. NOT tracked by yadm.'
       print '#'
       print '# Replace every REPLACE_ME below with the real value, then open a'
-      print '# new shell. Until then this machine will fail on startup.'
+      print '# new shell. Until then every shell warns on startup and anything'
+      print '# needing these keys fails.'
       print ''
       for _v in $ZSHENV_REQUIRED; print "export ${_v}=\"REPLACE_ME\""
     } > $ZSHENV_LOCAL
   )
   chmod 600 $ZSHENV_LOCAL 2>/dev/null
-  print -u2 "FATAL: ~/.zshenv.local was missing on ${HOST}."
-  print -u2 "       Created it with placeholders for: ${ZSHENV_REQUIRED}"
-  print -u2 "       Fill in the real values, then open a new shell."
-  [[ -o interactive ]] || exit 1
+  print -u2 "WARNING: ~/.zshenv.local was missing on ${HOST}."
+  print -u2 "         Created it with placeholders for: ${ZSHENV_REQUIRED}"
+  print -u2 "         Fill in the real values, then open a new shell."
+  # Skip the validation below — the file was just written with placeholders,
+  # and warning twice about the same thing helps nobody.
   return 1
 fi
 
@@ -83,11 +92,10 @@ for _v in $ZSHENV_REQUIRED; do
   fi
 done
 if (( $#_zshenv_bad )); then
-  print -u2 "FATAL: ~/.zshenv.local is unset or still has placeholders on ${HOST}:"
-  print -u2 "       ${_zshenv_bad}"
-  print -u2 "       Fill in the real values in ~/.zshenv.local, then open a new shell."
+  print -u2 "WARNING: ~/.zshenv.local is unset or still has placeholders on ${HOST}:"
+  print -u2 "         ${_zshenv_bad}"
+  print -u2 "         Fill in the real values in ~/.zshenv.local, then open a new shell."
   unset _v _zshenv_bad
-  [[ -o interactive ]] || exit 1
   return 1
 fi
 unset _v _zshenv_bad
