@@ -11,8 +11,9 @@
 #                  them are alike enough to share a category.
 #
 #   verne    macOS    daily driver + dev; muesli sync
-#   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet
-#                     server, tailnet exit node (the second, alongside wells)
+#   lem      macOS    daily driver + dev; muesli sync, ollama served to the
+#                     tailnet (wells embeds against it), tailnet exit node
+#                     (the second, alongside wells)
 #
 #                     Both Macs run the Granola pull and share the result
 #                     through Obsidian Sync, so either one alone keeps the
@@ -754,7 +755,13 @@ common_ollama() {
     # it survives reboot instead of running as an orphaned process. Guarded,
     # because `brew services start` errors on an already-running service.
     if [ "$OS" = Darwin ]; then
-        if ! brew services info ollama --json 2>/dev/null | jq -e '.[0].running' >/dev/null 2>&1; then
+        # Where a local agent already owns ollama (lem, so the tailnet can reach
+        # it), leave brew's service alone — both want :11434 and only one can
+        # have it. Checked by what is loaded rather than by hostname, so this
+        # stays correct if another machine takes the role.
+        if launchctl print "gui/$(id -u)/${OLLAMA_LABEL}" >/dev/null 2>&1; then
+            log "ollama is managed by $OLLAMA_LABEL; leaving brew services alone"
+        elif ! brew services info ollama --json 2>/dev/null | jq -e '.[0].running' >/dev/null 2>&1; then
             log "Starting ollama via brew services"
             brew services start ollama || warn "could not start the ollama service"
         fi
@@ -826,6 +833,74 @@ PLIST
 
     warn "could not load $label; see ~/Library/Logs/${label}.err"
     return 1
+}
+
+# --- lem: ollama as the tailnet's inference host ----------------------------
+#
+# lem holds the local models nothing else here can run — an M4 Pro with ~52 GiB
+# of unified memory against wells' CPU-only box. wells embeds its msgvault
+# archive against this endpoint: measured ~1s per batch over the tailnet versus
+# ~11s on wells' own CPU, which over a 20G archive is the difference between
+# hours and days.
+#
+# Homebrew's service cannot do this. Its plist declares EnvironmentVariables
+# straight from the formula, and a plist that declares that dict receives
+# exactly it — `launchctl setenv OLLAMA_HOST` does not merge in, which is why
+# setting it that way appears to work and changes nothing. Editing brew's copy
+# does work, until the next `brew services` run regenerates the plist from the
+# formula and silently reverts it. Hence an agent of our own.
+OLLAMA_LABEL="local.ollama"
+OLLAMA_BIN="/opt/homebrew/bin/ollama"
+# 0.0.0.0 rather than the tailnet IP — deliberately, for now. See the security
+# note this queues.
+OLLAMA_LISTEN="0.0.0.0"
+
+lem_ollama_agent() {
+    [ -x "$OLLAMA_BIN" ] || { warn "$OLLAMA_BIN not found; is ollama installed?"; return 1; }
+
+    # Both services want :11434. `brew services stop` also removes brew's
+    # LaunchAgent, so afterwards there is exactly one thing claiming the port
+    # and no race at boot.
+    if brew services info ollama --json 2>/dev/null | jq -e '.[0].loaded' >/dev/null 2>&1; then
+        log "Stopping the Homebrew ollama service in favour of $OLLAMA_LABEL"
+        brew services stop ollama >/dev/null 2>&1 \
+            || warn "could not stop the Homebrew ollama service"
+    fi
+
+    # FLASH_ATTENTION and KV_CACHE_TYPE are carried over deliberately: they come
+    # from Homebrew's formula, not from any of our config, so an agent that sets
+    # only OLLAMA_HOST silently drops two tuning settings that were in effect
+    # while brew owned the service.
+    # KeepAlive because this is a resident daemon, not a periodic job. It also
+    # covers a bind that fails at boot: if OLLAMA_LISTEN is ever narrowed to the
+    # tailnet IP, launchd retries until tailscaled has brought the interface up.
+    _launch_agent "$OLLAMA_LABEL" \
+        "    <key>KeepAlive</key>         <true/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>OLLAMA_HOST</key>            <string>${OLLAMA_LISTEN}</string>
+        <key>OLLAMA_FLASH_ATTENTION</key> <string>1</string>
+        <key>OLLAMA_KV_CACHE_TYPE</key>   <string>q8_0</string>
+    </dict>" \
+        "$OLLAMA_BIN" serve || return 1
+
+    log "  ollama listening on ${OLLAMA_LISTEN}:11434 for the tailnet"
+    manual "SECURITY, when convenient: ollama on lem listens on ${OLLAMA_LISTEN} with NO
+      authentication of any kind. Anything that can reach :11434 — every device
+      on the LAN, including guest wifi and IoT — can list, run, pull and delete
+      models. Two changes, and BOTH are needed because either alone achieves
+      nothing:
+        1. Bind the tailnet IP instead of the wildcard, by setting
+           OLLAMA_LISTEN=\"\$(tailscale ip -4):11434\" in this file. On the
+           wildcard, LAN traffic reaches ollama without passing through
+           Tailscale at all, so no ACL can see it.
+        2. Add a Tailscale ACL restricting dst lem:11434 to the nodes that need
+           it, AND narrow the catch-all src/dst rule most tailnets ship with —
+           ACLs are additive allow-lists, so a new narrow rule restricts
+           nothing while a permissive one remains.
+      Note OLLAMA_ORIGINS is not the answer: it reads like a host allowlist but
+      only filters the browser CORS Origin header, so any client that sends no
+      Origin header — curl, msgvault, every API caller — is unaffected."
 }
 
 # --- verne and lem only: Granola transcript sync ----------------------------
@@ -1148,9 +1223,9 @@ case "$HOST" in
         macos_muesli
         ;;
     lem)
-        # The ollama service itself now starts everywhere via common_ollama.
-        # What stays lem-specific is the tailnet-server role: other machines
-        # point at lem for the local models only it holds.
+        # common_ollama starts the service everywhere. What is lem-specific is
+        # serving it to the tailnet, which needs an agent brew cannot provide.
+        lem_ollama_agent
         macos_muesli
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
