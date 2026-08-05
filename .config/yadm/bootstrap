@@ -73,12 +73,13 @@ fi
 # Everything not installed by a package manager lands here.
 BIN_DIR="$HOME/.local/bin"
 
-# Which release tag each BIN_DIR tool was installed from. Without this the
-# only "is it current?" signal is the binary's own --version, and those
-# disagree wildly in format — "Yazi 26.5.6 (aa52643 2026-05-05)" against
-# "Version:\t v5.36.1" against a bare "v0.34.1 (4747fb05)". Recording the tag
-# we installed sidesteps parsing seven different conventions.
-RELEASE_STATE="$HOME/.local/share/yadm-bootstrap/releases"
+# What version of each self-installed tool is on this box: a release tag for
+# the GitHub-release binaries, a short commit for anything built from a git
+# checkout. Without it the only "is it current?" signal is the binary's own
+# --version, and those disagree wildly in format — "Yazi 26.5.6 (aa52643
+# 2026-05-05)" against "Version:\t v5.36.1" against a bare "v0.34.1
+# (4747fb05)". Recording what we installed sidesteps parsing all of them.
+VERSION_STATE="$HOME/.local/share/yadm-bootstrap/releases"
 
 # GUI apps: always on macOS, opt-in on Linux.
 gui=""
@@ -88,6 +89,36 @@ case "$OS" in
 esac
 
 log "os=$OS host=$HOST gui=${gui:-0}"
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+#
+# Used by both OS paths, so they live above the platform sections rather than
+# inside either one.
+# ---------------------------------------------------------------------------
+
+_version_installed() {  # name -> prints the recorded version, if any
+    [ -f "$VERSION_STATE" ] || return 0
+    awk -v b="$1" '$1 == b { print $2; exit }' "$VERSION_STATE"
+}
+
+_version_record() {  # name  version
+    mkdir -p "$(dirname "$VERSION_STATE")"
+    touch "$VERSION_STATE"
+    local tmp; tmp=$(mktemp)
+    # Rewrite without this name, append the new value, sort. Chained so that a
+    # failure anywhere discards the temp file and leaves the state as it was —
+    # a half-written state file would make the next run draw wrong conclusions
+    # about what is installed.
+    if awk -v b="$1" '$1 != b' "$VERSION_STATE" > "$tmp" \
+       && printf '%s\t%s\n' "$1" "$2" >> "$tmp" \
+       && sort -o "$tmp" "$tmp"; then
+        mv "$tmp" "$VERSION_STATE"
+    else
+        rm -f "$tmp"
+        warn "could not record the installed version of $1"
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # macOS
@@ -292,7 +323,7 @@ ubuntu_apt() {
     sudo dpkg-reconfigure -f noninteractive unattended-upgrades
 }
 
-# --- 2. vendor apt repos ---------------------------------------------------
+# --- vendor apt repos ---------------------------------------------------
 
 _add_repo() {  # name  keyurl  repoline
     local name=$1 keyurl=$2 repoline=$3
@@ -338,7 +369,7 @@ ubuntu_repos() {
     sudo apt-get install -y gh || warn "gh failed to install"
 }
 
-# --- 3. install scripts ----------------------------------------------------
+# --- install scripts ----------------------------------------------------
 
 ubuntu_scripts() {
     command_exists mise     || { log "Installing mise";     curl -fsSL https://mise.run | sh; }
@@ -369,26 +400,12 @@ ubuntu_scripts() {
     fi
 }
 
-# --- 4. GitHub releases ----------------------------------------------------
+# --- GitHub releases ----------------------------------------------------
 #
 # Resolve the latest release asset through the public API rather than `gh`.
 # `gh release download` needs an authenticated gh, which a fresh box does not
 # have yet — and bootstrap should not require an interactive login. The public
-# API allows 60 requests/hour unauthenticated; this makes six.
-
-_release_tag_installed() {  # binary -> prints recorded tag, if any
-    [ -f "$RELEASE_STATE" ] || return 0
-    awk -v b="$1" '$1 == b { print $2; exit }' "$RELEASE_STATE"
-}
-
-_release_tag_record() {  # binary  tag
-    mkdir -p "$(dirname "$RELEASE_STATE")"
-    touch "$RELEASE_STATE"
-    local tmp; tmp=$(mktemp)
-    awk -v b="$1" '$1 != b' "$RELEASE_STATE" > "$tmp"
-    printf '%s\t%s\n' "$1" "$2" >> "$tmp"
-    sort -o "$tmp" "$tmp" && mv "$tmp" "$RELEASE_STATE"
-}
+# API allows 60 requests/hour unauthenticated; this makes one per tool below.
 
 _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
     local bin=$1 repo=$2 re=$3 inner=${4:-$1}
@@ -416,7 +433,7 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
     # Upgrade when the published tag has moved on. A tool installed before this
     # state file existed has no recorded tag, so it reinstalls once and is
     # tracked from then on.
-    if command_exists "$bin" && [ -n "$tag" ] && [ "$(_release_tag_installed "$bin")" = "$tag" ]; then
+    if command_exists "$bin" && [ -n "$tag" ] && [ "$(_version_installed "$bin")" = "$tag" ]; then
         return 0
     fi
 
@@ -436,7 +453,7 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
         # inner path to guess
         *.gz)           gunzip -c "$tmp/dl" > "$tmp/$bin"; chmod +x "$tmp/$bin" ;;
         *)              if install -m755 "$tmp/dl" "$BIN_DIR/$bin"; then
-                            _release_tag_record "$bin" "$tag"
+                            _version_record "$bin" "$tag"
                         else
                             warn "could not install $bin to $BIN_DIR/$bin"
                         fi
@@ -457,7 +474,7 @@ _install_release() {  # binary  repo  asset-regex  [path-inside-archive]
     else
         # Only on a confirmed write. Recording the tag after a failed install
         # would make the next run believe $bin is already current.
-        _release_tag_record "$bin" "$tag"
+        _version_record "$bin" "$tag"
     fi
     rm -rf "$tmp"
 }
@@ -759,46 +776,118 @@ common_ollama() {
     fi
 }
 
-# muesli syncs Granola transcripts and is only wanted where that sync runs,
-# which is a Mac. wells has no reason to hold a Granola refresh token.
-macos_muesli() {
-    if ! command_exists rustup; then
-        log "Installing Rust via rustup"
-        curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
-    fi
-    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+# --- LaunchAgents -----------------------------------------------------------
+#
+# Both scheduled jobs below want the same plist envelope, the same log paths,
+# and the same unload-then-load dance; they differ only in the label, the
+# command, and one or two scheduling keys. Those are the arguments, and
+# everything else lives here once.
+#
+#   _launch_agent <label> <extra-plist-keys> <program> [args...]
+#
+# <extra-plist-keys> is raw plist XML for whatever the job needs beyond
+# RunAtLoad — StartInterval for a periodic job, KeepAlive and WorkingDirectory
+# for a resident one. Raw XML rather than a named option per launchd key: there
+# are dozens of keys and this would otherwise grow a parameter every time one
+# of them is needed.
+_launch_agent() {
+    local label=$1 extra=$2; shift 2
 
-    command_exists cargo || { warn "cargo is missing"; return 1; }
-    if [ ! -d "$HOME/repos/muesli" ]; then
-        log "Cloning muesli"
-        mkdir -p "$HOME/repos"
-        git clone https://github.com/sychou/muesli.git "$HOME/repos/muesli"
-    fi
-    log "Installing muesli"
-    cargo install --path "$HOME/repos/muesli"
+    local args="" a
+    for a in "$@"; do args="$args
+        <string>${a}</string>"; done
+
+    log "Installing the $label LaunchAgent"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+
+    local plist="$HOME/Library/LaunchAgents/${label}.plist"
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>             <string>${label}</string>
+    <key>ProgramArguments</key>
+    <array>${args}
+    </array>
+${extra}
+    <key>RunAtLoad</key>         <true/>
+    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${label}.log</string>
+    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${label}.err</string>
+</dict>
+</plist>
+PLIST
+
+    # bootout first: launchctl refuses to bootstrap a label that is already
+    # loaded, so without this a re-run would silently keep the old plist. It is
+    # expected to fail on a first install, hence the discarded output.
+    launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null
+    launchctl bootstrap "gui/$(id -u)" "$plist" && return 0
+
+    warn "could not load $label; see ~/Library/Logs/${label}.err"
+    return 1
 }
 
-# --- verne and lem: scheduled Granola transcript sync -----------------------
+# --- verne and lem only: Granola transcript sync ----------------------------
 #
 # muesli pulls Granola transcripts to ~/.local/share/muesli/transcripts, which
 # qmd indexes as its `granola` collection.
 #
-# BOTH machines run it, and the transcript directory is an Obsidian-synced
-# vault, so whichever machine is awake does the pull and the other picks the
-# files up. That covers the two failure modes a single writer could not: verne
-# travelling and lem being asleep or unreachable. Either box alone keeps the
-# collection current.
+# verne and lem, and nowhere else. muesli auto-detects its auth from the
+# Granola desktop app, so a machine without that app cannot use it at all —
+# and tiptree excludes the Granola cask. It used to be built on every Mac on
+# the theory that any of them could run a sync by hand; that was wrong.
+# tiptree was installing a Rust toolchain and compiling a binary it had no
+# credentials to run. Both halves — the build and the LaunchAgent — are now
+# reached only from the two arms that can actually use them.
+#
+# BOTH of those machines run it, and the transcript directory is an
+# Obsidian-synced vault, so whichever machine is awake does the pull and the
+# other picks the files up. That covers the two failure modes a single writer
+# could not: verne travelling and lem being asleep or unreachable. Either box
+# alone keeps the collection current.
 #
 # Two writers is safe here specifically because both pull from the same Granola
 # API and write byte-identical files — Obsidian Sync only forks a file when the
 # two sides genuinely differ. muesli's DuckDB index and its models stay
 # machine-local and are NOT synced; only transcripts/ belongs in the vault.
 # Syncing the database would put two machines' derived state in conflict.
+
+# Upstream is harperreed/muesli; sychou/muesli is the fork PR #6 comes from.
+MUESLI_UPSTREAM="https://github.com/harperreed/muesli.git"
+
+# PINNED to an open pull request, deliberately. Recent Granola desktop builds
+# migrate the session key off disk and delete
+# ~/Library/Application Support/Granola/storage.dek, which breaks auth on
+# upstream main outright — every sync exits with
+#   Authentication failed: read .../storage.dek: No such file or directory
+# PR #6 replaces that path with a refresh-token exchange. Building main instead
+# produces a muesli that compiles, installs, and then fails every single sync.
 #
-# Both need the Granola desktop app installed and logged in — muesli
-# auto-detects its auth from it, and a signed-out machine fails silently,
-# leaving searches quietly empty. tiptree excludes the Granola cask, which is
-# why it is not in this list.
+# Do not expect this pin to be temporary. Three days after the PR was opened,
+# upstream deprecated the project instead of merging it (e1a527c, 2026-07-20):
+# "Muesli is no longer useful. Granola removed the local data access method
+# Muesli relied on." So main is not going to be fixed, and tracking it means
+# tracking a build whose auth cannot work.
+#
+# The PR shows the tool still can work, which leaves two honest options:
+# maintain sychou/muesli as the real source and point this there, or drop
+# muesli for Granola's official API. Until one is chosen, this pin IS the
+# working configuration rather than a stopgap.
+#   https://github.com/harperreed/muesli/pull/6
+MUESLI_PR=6
+MUESLI_REF="fix/granola-refresh-token-auth"
+
+# muesli writes to ~/.local/share/muesli/transcripts. That path is a symlink
+# into an Obsidian vault, which is what actually fans the files out to the
+# other Mac — without it a machine syncs Granola to a purely local directory
+# and the whole two-writer design above does nothing.
+#
+# ONLY transcripts/ is redirected. The DuckDB index and models stay behind in
+# ~/.local/share/muesli as machine-local derived state; syncing those would put
+# two machines' indexes in conflict.
+MUESLI_VAULT="$HOME/Vaults/Granola"
+MUESLI_TRANSCRIPTS="$HOME/.local/share/muesli/transcripts"
 
 MUESLI_LABEL="com.sychou.muesli-sync"
 MUESLI_BIN="$HOME/.cargo/bin/muesli"
@@ -808,45 +897,118 @@ MUESLI_BIN="$HOME/.cargo/bin/muesli"
 # and they boot at different times — so they rarely pull simultaneously.
 MUESLI_INTERVAL=1800
 
-macos_muesli_sync_agent() {
-    [ -x "$MUESLI_BIN" ] || { warn "$MUESLI_BIN not found — macos_muesli did not complete"; return 1; }
+_muesli_install() {
+    if ! command_exists rustup; then
+        log "Installing Rust via rustup"
+        curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
+    fi
+    # rustup's installer does not put cargo on the running shell's PATH.
+    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+    command_exists cargo || { warn "cargo is missing; cannot build muesli"; return 1; }
 
-    local plist="$HOME/Library/LaunchAgents/${MUESLI_LABEL}.plist"
-    log "Installing the $MUESLI_LABEL LaunchAgent"
-    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+    local repo="$HOME/repos/muesli"
+    if [ ! -d "$repo/.git" ]; then
+        log "Cloning muesli"
+        mkdir -p "$(dirname "$repo")"
+        git clone --quiet "$MUESLI_UPSTREAM" "$repo" \
+            || { warn "could not clone muesli"; return 1; }
+    fi
+
+    # Fetch the PR head by number rather than adding the fork as a remote: it
+    # works on a fresh clone and on the checkout already on disk, whatever its
+    # remotes are called. --force because a PR branch can be force-pushed.
+    #
+    # Best-effort throughout. Offline, or on a checkout carrying local commits,
+    # building what is on disk beats skipping muesli entirely.
+    log "Building muesli from PR #${MUESLI_PR} — the auth fix is not in main yet"
+    if git -C "$repo" fetch --quiet --force origin \
+           "refs/pull/${MUESLI_PR}/head:${MUESLI_REF}"; then
+        git -C "$repo" checkout --quiet "$MUESLI_REF" \
+            || warn "could not switch to $MUESLI_REF; building the current branch"
+    else
+        warn "could not fetch muesli PR #${MUESLI_PR}; building what is on disk"
+    fi
+
+    # Rebuild only when the checkout moved. `cargo install --path` recompiles
+    # unconditionally otherwise, costing a full build on every bootstrap of
+    # verne and lem. The commit goes in the same state file that tracks the
+    # release binaries.
+    local head; head=$(git -C "$repo" rev-parse --short HEAD)
+    if command_exists muesli && [ "$(_version_installed muesli)" = "$head" ]; then
+        log "muesli is current at $head"
+        return 0
+    fi
+
+    log "Building muesli $head"
+    if cargo install --quiet --path "$repo"; then
+        _version_record muesli "$head"
+    else
+        warn "could not build muesli"
+        return 1
+    fi
+}
+
+_muesli_sync_agent() {
+    [ -x "$MUESLI_BIN" ] || { warn "$MUESLI_BIN not found — the muesli build did not complete"; return 1; }
 
     # StartInterval, not KeepAlive: this is a periodic job that exits, not a
     # daemon. KeepAlive would restart it in a tight loop forever.
-    cat > "$plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>             <string>${MUESLI_LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>${MUESLI_BIN}</string>
-        <string>sync</string>
-    </array>
-    <key>StartInterval</key>     <integer>${MUESLI_INTERVAL}</integer>
-    <key>RunAtLoad</key>         <true/>
-    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${MUESLI_LABEL}.log</string>
-    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${MUESLI_LABEL}.err</string>
-</dict>
-</plist>
-PLIST
+    _launch_agent "$MUESLI_LABEL" \
+        "    <key>StartInterval</key>     <integer>${MUESLI_INTERVAL}</integer>" \
+        "$MUESLI_BIN" sync || return 1
 
-    launchctl bootout "gui/$(id -u)/${MUESLI_LABEL}" 2>/dev/null
-    if launchctl bootstrap "gui/$(id -u)" "$plist"; then
-        log "  syncing every $((MUESLI_INTERVAL / 60))m — log: ~/Library/Logs/${MUESLI_LABEL}.log"
-        manual "Confirm the first muesli sync actually ran:
+    log "  syncing every $((MUESLI_INTERVAL / 60))m — log: ~/Library/Logs/${MUESLI_LABEL}.log"
+    manual "Confirm the first muesli sync actually ran:
       log show --predicate 'process == \"muesli\"' --last 1h
       tail ~/Library/Logs/${MUESLI_LABEL}.err
       A LaunchAgent runs without your shell environment, so a token the CLI
       finds interactively is not guaranteed to be readable here."
-    else
-        warn "could not load $MUESLI_LABEL; check the log above"
+}
+
+# The one entry point. Build and schedule are never wanted apart, so a machine
+# opts in with a single call and cannot half-adopt muesli by forgetting one.
+_muesli_vault_link() {
+    mkdir -p "$MUESLI_VAULT" "$(dirname "$MUESLI_TRANSCRIPTS")"
+
+    if [ -L "$MUESLI_TRANSCRIPTS" ] && [ "$(readlink "$MUESLI_TRANSCRIPTS")" = "$MUESLI_VAULT" ]; then
+        return 0
     fi
+
+    # A real directory means muesli already synced outside the vault. Refuse
+    # rather than replace: those transcripts are the only copy, and rm -rf here
+    # would take them with it.
+    if [ -d "$MUESLI_TRANSCRIPTS" ] && [ ! -L "$MUESLI_TRANSCRIPTS" ]; then
+        warn "$MUESLI_TRANSCRIPTS is a real directory, not a link into the vault"
+        manual "muesli transcripts are outside the vault, so they are not syncing to
+      the other Mac. Move them in, then re-run bootstrap:
+      mv \"$MUESLI_TRANSCRIPTS\"/* \"$MUESLI_VAULT\"/
+      rmdir \"$MUESLI_TRANSCRIPTS\""
+        return 1
+    fi
+
+    # A dangling or misdirected symlink owns no data, so replacing it is safe.
+    [ -L "$MUESLI_TRANSCRIPTS" ] && rm -f "$MUESLI_TRANSCRIPTS"
+
+    log "Linking muesli transcripts into $MUESLI_VAULT"
+    ln -s "$MUESLI_VAULT" "$MUESLI_TRANSCRIPTS" \
+        || { warn "could not link $MUESLI_TRANSCRIPTS into the vault"; return 1; }
+
+    # Empty vault means this machine has not been joined to Obsidian Sync yet.
+    # muesli will happily fill a directory that syncs nowhere.
+    if [ -z "$(ls -A "$MUESLI_VAULT" 2>/dev/null)" ]; then
+        manual "Open $MUESLI_VAULT as a vault in Obsidian and connect it to Sync,
+      or the transcripts muesli writes stay on this machine only."
+    fi
+}
+
+# The one entry point. Build, link, schedule — a machine that does one without
+# the others is broken in a way that is quiet rather than obvious.
+macos_muesli() {
+    _muesli_install || return 1
+    # Not fatal: a local-only sync still beats no sync, and the warn plus the
+    # manual note above say exactly what is missing.
+    _muesli_vault_link
+    _muesli_sync_agent
 }
 
 # --- tiptree: the OpenClaw workspace as an Obsidian vault ------------------
@@ -863,46 +1025,31 @@ PLIST
 OB_VAULT="Sheldon"
 OB_WORKSPACE="$HOME/.openclaw/workspace"
 OB_LABEL="md.obsidian.headless-sync"
-# The mise SHIM, deliberately — not the versioned install path. common_mise
-# runs `mise use --global node@latest` on every bootstrap, so
-# .../installs/node/<version>/bin/ob moves out from under the LaunchAgent the
-# next time node bumps. The shim survives that.
+# The mise SHIM, deliberately — not the versioned install path that `npm -g`
+# reports. node is declared as `latest` in the tracked mise config, so
+# .../installs/node/<version>/bin/ob moves the next time that resolves to a
+# new release, leaving the LaunchAgent pointed at a path that no longer
+# exists. The shim survives version bumps.
 OB_BIN="$HOME/.local/share/mise/shims/ob"
 
 tiptree_obsidian_sync_agent() {
-    local plist="$HOME/Library/LaunchAgents/${OB_LABEL}.plist"
-    log "Installing the $OB_LABEL LaunchAgent"
-    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
-
     # WorkingDirectory is load-bearing: `ob sync` resolves which vault it is
-    # operating on from the directory it starts in.
-    cat > "$plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>             <string>${OB_LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>${OB_BIN}</string>
-        <string>sync</string>
-        <string>--continuous</string>
-    </array>
-    <key>WorkingDirectory</key>  <string>${OB_WORKSPACE}</string>
-    <key>RunAtLoad</key>         <true/>
-    <key>KeepAlive</key>         <true/>
-    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${OB_LABEL}.log</string>
-    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${OB_LABEL}.err</string>
-</dict>
-</plist>
-PLIST
+    # operating on from the directory it starts in. KeepAlive because unlike
+    # the muesli job this one is resident — `--continuous` never exits, so a
+    # crash should bring it straight back.
+    _launch_agent "$OB_LABEL" \
+        "    <key>WorkingDirectory</key>  <string>${OB_WORKSPACE}</string>
+    <key>KeepAlive</key>         <true/>" \
+        "$OB_BIN" sync --continuous || return 1
 
-    launchctl bootout "gui/$(id -u)/${OB_LABEL}" 2>/dev/null
-    if launchctl bootstrap "gui/$(id -u)" "$plist"; then
-        log "  continuous sync running — log: ~/Library/Logs/${OB_LABEL}.log"
-    else
-        warn "could not load $OB_LABEL; check the log above"
-    fi
+    log "  continuous sync running — log: ~/Library/Logs/${OB_LABEL}.log"
+    # tiptree is headless and not Sean's machine, so a silently dead sync would
+    # go unnoticed indefinitely. The muesli agent has always carried a check
+    # like this; this one needs it more.
+    manual "Confirm the Obsidian sync is actually running on tiptree — nothing
+      there will surface a failure locally:
+      launchctl print gui/\$(id -u)/${OB_LABEL} | head -20
+      tail ~/Library/Logs/${OB_LABEL}.err"
 }
 
 tiptree_obsidian_headless() {
@@ -988,7 +1135,7 @@ common_npm
 common_uv
 common_claude_code
 common_ollama
-[ "$OS" = Darwin ] && macos_muesli
+# muesli is deliberately NOT here — it is verne/lem only, from their arms.
 
 # ---------------------------------------------------------------------------
 # Machine one-offs
@@ -998,13 +1145,13 @@ case "$HOST" in
     verne)
         # Either Mac may do the Granola pull; the other picks the transcripts
         # up through Obsidian Sync. See the muesli block above.
-        macos_muesli_sync_agent
+        macos_muesli
         ;;
     lem)
         # The ollama service itself now starts everywhere via common_ollama.
         # What stays lem-specific is the tailnet-server role: other machines
         # point at lem for the local models only it holds.
-        macos_muesli_sync_agent
+        macos_muesli
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
         # wells needs applies here — advertising and admin-console approval
@@ -1056,9 +1203,17 @@ esac
 
 # Queued last so they print closest to the prompt, where they will be read.
 if [ "$OS" = Darwin ]; then
+    # The granola line only on the machines that hold transcripts. Pointing qmd
+    # at a directory muesli never populates yields an empty collection that
+    # looks indexed — worse than an absent one, because searches silently
+    # return nothing rather than erroring.
+    _granola_line=""
+    case "$HOST" in
+        verne|lem) _granola_line="
+      qmd collection add ~/.local/share/muesli/transcripts --name granola" ;;
+    esac
     manual "Index the notes in qmd:
-      qmd collection add ~/Vaults/Main --name obsidian
-      qmd collection add ~/.local/share/muesli/transcripts --name granola
+      qmd collection add ~/Vaults/Main --name obsidian${_granola_line}
       qmd update && qmd embed
       See README 'qmd — Local Note Search'."
 fi
