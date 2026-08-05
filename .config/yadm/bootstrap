@@ -10,8 +10,9 @@
 #                  keyed on hostname rather than a class, because no two of
 #                  them are alike enough to share a category.
 #
-#   verne    macOS    daily driver + dev
-#   lem      macOS    daily driver + dev; muesli sync, ollama as tailnet server,
+#   verne    macOS    daily driver + dev; muesli sync (the laptop travels, so
+#                     the Granola pull runs where Granola is actually used)
+#   lem      macOS    daily driver + dev; ollama as tailnet server,
 #                     tailnet exit node (the second, alongside wells)
 #   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand). Runs
 #                     obsidian-headless instead of the desktop app, syncing
@@ -773,6 +774,71 @@ macos_muesli() {
     cargo install --path "$HOME/repos/muesli"
 }
 
+# --- verne: scheduled Granola transcript sync -------------------------------
+#
+# muesli pulls Granola transcripts to ~/.local/share/muesli/transcripts, which
+# qmd indexes as its `granola` collection.
+#
+# On verne rather than lem, despite lem being the always-on box. muesli
+# auto-detects its auth from the Granola desktop app, so the pull has to run
+# somewhere Granola is installed and logged in — and a stale token on a machine
+# you rarely look at fails silently, leaving searches quietly empty. verne is
+# the machine Granola is actually used on, so a broken login is obvious the same
+# day. Nothing waits on this job, so uptime buys less than freshness does:
+# launchd runs a missed StartInterval on wake, which covers a sleeping laptop.
+#
+# Deliberately ONE writer. muesli is idempotent against the Granola API, but a
+# second machine writing the same files into a synced folder only produces
+# conflict copies. macos_muesli still installs the binary everywhere, so any Mac
+# can run `muesli sync` by hand if verne is lost.
+
+MUESLI_LABEL="com.sychou.muesli-sync"
+MUESLI_BIN="$HOME/.cargo/bin/muesli"
+# Every 30 minutes. Granola needs a moment to process a call after it ends, so
+# tighter than this mostly polls an API that has nothing new yet.
+MUESLI_INTERVAL=1800
+
+verne_muesli_sync_agent() {
+    [ -x "$MUESLI_BIN" ] || { warn "$MUESLI_BIN not found — macos_muesli did not complete"; return 1; }
+
+    local plist="$HOME/Library/LaunchAgents/${MUESLI_LABEL}.plist"
+    log "Installing the $MUESLI_LABEL LaunchAgent"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+
+    # StartInterval, not KeepAlive: this is a periodic job that exits, not a
+    # daemon. KeepAlive would restart it in a tight loop forever.
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>             <string>${MUESLI_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${MUESLI_BIN}</string>
+        <string>sync</string>
+    </array>
+    <key>StartInterval</key>     <integer>${MUESLI_INTERVAL}</integer>
+    <key>RunAtLoad</key>         <true/>
+    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${MUESLI_LABEL}.log</string>
+    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${MUESLI_LABEL}.err</string>
+</dict>
+</plist>
+PLIST
+
+    launchctl bootout "gui/$(id -u)/${MUESLI_LABEL}" 2>/dev/null
+    if launchctl bootstrap "gui/$(id -u)" "$plist"; then
+        log "  syncing every $((MUESLI_INTERVAL / 60))m — log: ~/Library/Logs/${MUESLI_LABEL}.log"
+        manual "Confirm the first muesli sync actually ran:
+      log show --predicate 'process == \"muesli\"' --last 1h
+      tail ~/Library/Logs/${MUESLI_LABEL}.err
+      A LaunchAgent runs without your shell environment, so a token the CLI
+      finds interactively is not guaranteed to be readable here."
+    else
+        warn "could not load $MUESLI_LABEL; check the log above"
+    fi
+}
+
 # --- tiptree: the OpenClaw workspace as an Obsidian vault ------------------
 #
 # Sheldon's OpenClaw workspace is mirrored into Obsidian Sync as the "Sheldon"
@@ -920,17 +986,14 @@ common_ollama
 
 case "$HOST" in
     verne)
-        # Daily driver. Everything it needs is in the common path — the arm
-        # exists so the primary machine stops reporting itself as unrecognised.
-        log "verne: daily driver — no machine-specific setup needed"
+        # The travelling machine, so it owns the Granola pull.
+        verne_muesli_sync_agent
         ;;
     lem)
         # The ollama service itself now starts everywhere via common_ollama.
         # What stays lem-specific is the tailnet-server role: other machines
         # point at lem for the local models only it holds.
-        manual "lem: set up the muesli sync LaunchAgent. Not yet written — muesli
-      is installed by macos_muesli, but nothing schedules the Granola sync.
-      Model it on tiptree_obsidian_sync_agent in this file."
+        log "lem: muesli is installed but not scheduled — verne owns the sync"
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
         # wells needs applies here — advertising and admin-console approval
