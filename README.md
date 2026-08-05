@@ -9,10 +9,13 @@ Only two things vary.
 
 | Host | OS | Role | GUI apps |
 | ---- | -- | ---- | -------- |
-| `verne` | macOS | daily driver + dev | all 29 |
-| `lem` | macOS | daily driver + dev; muesli sync, ollama as tailnet server | 28 (no `trezor-suite`) |
-| `tiptree` | macOS | Sheldon's box; OpenClaw (installed by hand) | 11 |
-| `wells` | Ubuntu | msgvault server + Gmail sync | opt-in |
+| `verne` | macOS | daily driver + dev; muesli sync | all 29 |
+| `lem` | macOS | daily driver + dev; muesli sync, ollama served to the tailnet, exit node | 28 (no `trezor-suite`) |
+| `tiptree` | macOS | Sheldon's box; OpenClaw (by hand), obsidian-headless syncing the workspace as the "Sheldon" vault | 10 |
+| `wells` | Ubuntu | msgvault server + Gmail sync, exit node | opt-in |
+
+Both Macs that have Granola run the muesli sync and share the result through
+Obsidian Sync, so either one alone keeps the transcripts current.
 
 **1. GUI apps.** Always installed on macOS. On Linux it is a per-machine choice:
 
@@ -22,8 +25,11 @@ yadm config local.gui true
 
 **2. Hostname.** Each machine's one-off role is keyed on `hostname -s` rather
 than on a class, because no two of these are alike enough to share a category.
-`lem` starts ollama as a service; `wells` runs the msgvault server; `tiptree`
-gets OpenClaw by hand.
+`lem` serves ollama to the tailnet from its own LaunchAgent — Homebrew's
+service cannot, since a plist that declares `EnvironmentVariables` receives
+exactly that dict and `launchctl setenv OLLAMA_HOST` never reaches the process.
+`wells` runs the msgvault server and embeds against `lem`; `tiptree` gets
+OpenClaw by hand.
 
 **OS detection is independent of hostname.** An unrecognised machine still
 takes the correct macOS or Ubuntu path and gets the full core toolchain — only
@@ -74,7 +80,8 @@ yadm clone https://github.com/sychou/dotfiles
 ```
 
 The bootstrap script handles everything else: Homebrew packages, cask apps,
-fonts, mise runtimes, Python tools, Rust, muesli, and Claude Code. (The
+fonts, mise runtimes, Python tools, and Claude Code — plus Rust and muesli on
+the two Macs that sync Granola. (The
 bootstrap itself re-runs the brew `shellenv` step internally, so it works even
 on a fresh machine.)
 
@@ -384,8 +391,11 @@ utilities:
 > Visual Studio Code
 
 Excluded on `tiptree`: Bambu Studio, Boop, ChatGPT, Claude, Discord, Granola,
-HandBrake, Logi Options+, Microsoft Teams, Signal, Spotify, Telegram,
+HandBrake, Logi Options+, Microsoft Teams, Obsidian, Signal, Spotify, Telegram,
 Trezor Suite, VLC, Webex, WhatsApp, Wispr Flow, Zoom.
+
+Obsidian is excluded in favour of `obsidian-headless`: nobody sits at that
+machine, it only needs to push the OpenClaw workspace to Sync.
 
 **`wells`** — no casks; Ubuntu. If given a desktop (`yadm config local.gui
 true`) it gets `ubuntu-desktop-minimal` and `vlc` from apt, and the rest —
@@ -414,9 +424,16 @@ Not on Homebrew, so installed as global npm packages after mise sets up node:
 
 ### Built from Source
 
-- **muesli** — Granola transcript sync, built with cargo from
-  [sychou/muesli](https://github.com/sychou/muesli). The bootstrap installs
-  rustup first, clones to `~/repos/muesli`, then `cargo install --path`.
+- **muesli** — Granola transcript sync, on `verne` and `lem` only. Built with
+  cargo from [harperreed/muesli](https://github.com/harperreed/muesli), pinned
+  to [PR #6](https://github.com/harperreed/muesli/pull/6). Granola deleted the
+  `storage.dek` the tool authenticated with, so upstream `main` builds a binary
+  whose every sync fails — and upstream deprecated the project three days after
+  that PR was opened rather than merging it, so the pin is the working
+  configuration rather than a stopgap. The bootstrap installs rustup, clones to
+  `~/repos/muesli`, fetches the PR head by number, and rebuilds only when the
+  commit has moved. It also links `~/.local/share/muesli/transcripts` into
+  `~/Vaults/Granola` so Obsidian Sync fans the transcripts to the other Mac.
 - **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash`,
   landing in `~/.local/bin/claude`.
 
@@ -485,7 +502,7 @@ is a manual post-install step (the bootstrap only prints a reminder):
 
 ```sh
 qmd collection add ~/Vaults/Main --name obsidian                     # Obsidian vault
-qmd collection add ~/.local/share/muesli/transcripts --name granola  # Granola transcripts (via muesli)
+qmd collection add ~/.local/share/muesli/transcripts --name granola  # verne/lem only — via muesli
 qmd update                                                           # index files
 qmd embed                                                            # generate embeddings
 ```
