@@ -8,7 +8,6 @@
 - fd (better find)
 - gh (GitHub CLI)
 - gog (Google Workspace CLI — see `gog` skill for full reference)
-- muesli (Granola meeting transcripts — see `muesli` skill for full reference)
 - jq (JSON processor)
 - msgvault (personal email archive search — see `sean-email-archive` skill for full reference)
 - poppler (pdftotext and other PDF tools)
@@ -37,13 +36,18 @@ Three corpora, three tools. Pick by what you're looking for — don't grep the v
 
 | Looking for | Use | Notes |
 | ----------- | --- | ----- |
-| Notes, journal, meeting transcripts | **qmd** | Indexed. `-c obsidian` (the vault) or `-c granola` (Isomer meeting notes); omit `-c` for both. See the `qmd` skill. |
-| Email — what was said, when, by whom | **msgvault** | 1993–2008 imported (153,772 msgs), FTS + local embeddings. See the `sean-email-archive` skill. |
+| Notes and journal | **qmd** | Indexed. `-c obsidian` is the vault; `-c catalytic` is the Catalytic archive. See the `qmd` skill. |
+| Meeting transcripts (Granola) | **msgvault** | In the archive as `message_type = meeting_transcript`, synced nightly. NOT in qmd — the old `granola` collection was retired 2026-08-06. |
+| Email — what was said, when, by whom | **msgvault** | Full history, 1993→present (~465K msgs), FTS + semantic. See the `sean-email-archive` skill. |
 | `~/Desktop` documents (PDF/docx/xlsx…) | **fd** / **rg** | Not indexed anywhere. Target the relevant subdir; `poppler` for PDF text. |
 
 Prefer `qmd query` with hand-written `intent:`/`lex:`/`vec:` fields over a bare search string — you know the domain vocabulary and the aliases below, the expansion model doesn't.
 
-**msgvault** answers questions the notes can't: first contact with a person, how a relationship actually developed, what a company was called at the time. Use `--mode hybrid` for conceptual questions and `--mode fts` when you know the exact term. Note the archive is **1993–2008 only** until the Gmail OAuth sync closes the 2009–2026 gap.
+**msgvault** answers questions the notes can't: first contact with a person, how a relationship actually developed, what a company was called at the time. Use `--mode hybrid` for conceptual questions and `--mode fts` when you know the exact term.
+
+The archive is **complete from 1993 to the present** (~465K messages) and also holds **every Granola meeting** (`message_type = meeting_transcript`, ~1,600, synced nightly at 05:15 on wells). The old 2009–2026 gap is closed. Meetings are reachable by FTS and filters; semantic search *scoped to meetings* currently hits an upstream KNN bug, so drop the scope for conceptual meeting questions.
+
+The archive lives on **wells** and is reached over the tailnet — lem has a `[remote]` config pointing at `wells:58080`, so `msgvault` works from either machine.
 
 ### Entity aliases
 

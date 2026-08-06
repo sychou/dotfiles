@@ -10,14 +10,10 @@
 #                  keyed on hostname rather than a class, because no two of
 #                  them are alike enough to share a category.
 #
-#   verne    macOS    daily driver + dev; muesli sync
-#   lem      macOS    daily driver + dev; muesli sync, ollama served to the
-#                     tailnet (wells embeds against it), tailnet exit node
-#                     (the second, alongside wells)
-#
-#                     Both Macs run the Granola pull and share the result
-#                     through Obsidian Sync, so either one alone keeps the
-#                     transcripts current.
+#   verne    macOS    daily driver + dev
+#   lem      macOS    daily driver + dev; ollama served to the tailnet
+#                     (wells embeds against it), tailnet exit node (the
+#                     second, alongside wells)
 #   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand). Runs
 #                     obsidian-headless instead of the desktop app, syncing
 #                     the OpenClaw workspace as the "Sheldon" vault.
@@ -903,189 +899,6 @@ lem_ollama_agent() {
       Origin header — curl, msgvault, every API caller — is unaffected."
 }
 
-# --- verne and lem only: Granola transcript sync ----------------------------
-#
-# muesli pulls Granola transcripts to ~/.local/share/muesli/transcripts, which
-# qmd indexes as its `granola` collection.
-#
-# verne and lem, and nowhere else. muesli auto-detects its auth from the
-# Granola desktop app, so a machine without that app cannot use it at all —
-# and tiptree excludes the Granola cask. It used to be built on every Mac on
-# the theory that any of them could run a sync by hand; that was wrong.
-# tiptree was installing a Rust toolchain and compiling a binary it had no
-# credentials to run. Both halves — the build and the LaunchAgent — are now
-# reached only from the two arms that can actually use them.
-#
-# BOTH of those machines run it, and the transcript directory is an
-# Obsidian-synced vault, so whichever machine is awake does the pull and the
-# other picks the files up. That covers the two failure modes a single writer
-# could not: verne travelling and lem being asleep or unreachable. Either box
-# alone keeps the collection current.
-#
-# Two writers is safe here specifically because both pull from the same Granola
-# API and write byte-identical files — Obsidian Sync only forks a file when the
-# two sides genuinely differ. muesli's DuckDB index and its models stay
-# machine-local and are NOT synced; only transcripts/ belongs in the vault.
-# Syncing the database would put two machines' derived state in conflict.
-
-# Upstream is harperreed/muesli; sychou/muesli is the fork PR #6 comes from.
-MUESLI_UPSTREAM="https://github.com/harperreed/muesli.git"
-
-# PINNED to an open pull request, deliberately. Recent Granola desktop builds
-# migrate the session key off disk and delete
-# ~/Library/Application Support/Granola/storage.dek, which breaks auth on
-# upstream main outright — every sync exits with
-#   Authentication failed: read .../storage.dek: No such file or directory
-# PR #6 replaces that path with a refresh-token exchange. Building main instead
-# produces a muesli that compiles, installs, and then fails every single sync.
-#
-# Do not expect this pin to be temporary. Three days after the PR was opened,
-# upstream deprecated the project instead of merging it (e1a527c, 2026-07-20):
-# "Muesli is no longer useful. Granola removed the local data access method
-# Muesli relied on." So main is not going to be fixed, and tracking it means
-# tracking a build whose auth cannot work.
-#
-# The PR shows the tool still can work, which leaves two honest options:
-# maintain sychou/muesli as the real source and point this there, or drop
-# muesli for Granola's official API. Until one is chosen, this pin IS the
-# working configuration rather than a stopgap.
-#   https://github.com/harperreed/muesli/pull/6
-MUESLI_PR=6
-MUESLI_REF="fix/granola-refresh-token-auth"
-
-# muesli writes to ~/.local/share/muesli/transcripts. That path is a symlink
-# into an Obsidian vault, which is what actually fans the files out to the
-# other Mac — without it a machine syncs Granola to a purely local directory
-# and the whole two-writer design above does nothing.
-#
-# ONLY transcripts/ is redirected. The DuckDB index and models stay behind in
-# ~/.local/share/muesli as machine-local derived state; syncing those would put
-# two machines' indexes in conflict.
-MUESLI_VAULT="$HOME/Vaults/Granola"
-MUESLI_TRANSCRIPTS="$HOME/.local/share/muesli/transcripts"
-
-MUESLI_LABEL="com.sychou.muesli-sync"
-MUESLI_BIN="$HOME/.cargo/bin/muesli"
-# Every 30 minutes. Granola needs a moment to process a call after it ends, so
-# tighter than this mostly polls an API that has nothing new yet. The two
-# machines drift out of phase on their own — the interval counts from load,
-# and they boot at different times — so they rarely pull simultaneously.
-MUESLI_INTERVAL=1800
-
-_muesli_install() {
-    if ! command_exists rustup; then
-        log "Installing Rust via rustup"
-        curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
-    fi
-    # rustup's installer does not put cargo on the running shell's PATH.
-    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-    command_exists cargo || { warn "cargo is missing; cannot build muesli"; return 1; }
-
-    local repo="$HOME/repos/muesli"
-    if [ ! -d "$repo/.git" ]; then
-        log "Cloning muesli"
-        mkdir -p "$(dirname "$repo")"
-        git clone --quiet "$MUESLI_UPSTREAM" "$repo" \
-            || { warn "could not clone muesli"; return 1; }
-    fi
-
-    # Fetch the PR head by number rather than adding the fork as a remote: it
-    # works on a fresh clone and on the checkout already on disk, whatever its
-    # remotes are called. --force because a PR branch can be force-pushed.
-    #
-    # Best-effort throughout. Offline, or on a checkout carrying local commits,
-    # building what is on disk beats skipping muesli entirely.
-    log "Building muesli from PR #${MUESLI_PR} — the auth fix is not in main yet"
-    if git -C "$repo" fetch --quiet --force origin \
-           "refs/pull/${MUESLI_PR}/head:${MUESLI_REF}"; then
-        git -C "$repo" checkout --quiet "$MUESLI_REF" \
-            || warn "could not switch to $MUESLI_REF; building the current branch"
-    else
-        warn "could not fetch muesli PR #${MUESLI_PR}; building what is on disk"
-    fi
-
-    # Rebuild only when the checkout moved. `cargo install --path` recompiles
-    # unconditionally otherwise, costing a full build on every bootstrap of
-    # verne and lem. The commit goes in the same state file that tracks the
-    # release binaries.
-    local head; head=$(git -C "$repo" rev-parse --short HEAD)
-    if command_exists muesli && [ "$(_version_installed muesli)" = "$head" ]; then
-        log "muesli is current at $head"
-        return 0
-    fi
-
-    log "Building muesli $head"
-    if cargo install --quiet --path "$repo"; then
-        _version_record muesli "$head"
-    else
-        warn "could not build muesli"
-        return 1
-    fi
-}
-
-_muesli_sync_agent() {
-    [ -x "$MUESLI_BIN" ] || { warn "$MUESLI_BIN not found — the muesli build did not complete"; return 1; }
-
-    # StartInterval, not KeepAlive: this is a periodic job that exits, not a
-    # daemon. KeepAlive would restart it in a tight loop forever.
-    _launch_agent "$MUESLI_LABEL" \
-        "    <key>StartInterval</key>     <integer>${MUESLI_INTERVAL}</integer>" \
-        "$MUESLI_BIN" sync || return 1
-
-    log "  syncing every $((MUESLI_INTERVAL / 60))m — log: ~/Library/Logs/${MUESLI_LABEL}.log"
-    manual "Confirm the first muesli sync actually ran:
-      log show --predicate 'process == \"muesli\"' --last 1h
-      tail ~/Library/Logs/${MUESLI_LABEL}.err
-      A LaunchAgent runs without your shell environment, so a token the CLI
-      finds interactively is not guaranteed to be readable here."
-}
-
-# The one entry point. Build and schedule are never wanted apart, so a machine
-# opts in with a single call and cannot half-adopt muesli by forgetting one.
-_muesli_vault_link() {
-    mkdir -p "$MUESLI_VAULT" "$(dirname "$MUESLI_TRANSCRIPTS")"
-
-    if [ -L "$MUESLI_TRANSCRIPTS" ] && [ "$(readlink "$MUESLI_TRANSCRIPTS")" = "$MUESLI_VAULT" ]; then
-        return 0
-    fi
-
-    # A real directory means muesli already synced outside the vault. Refuse
-    # rather than replace: those transcripts are the only copy, and rm -rf here
-    # would take them with it.
-    if [ -d "$MUESLI_TRANSCRIPTS" ] && [ ! -L "$MUESLI_TRANSCRIPTS" ]; then
-        warn "$MUESLI_TRANSCRIPTS is a real directory, not a link into the vault"
-        manual "muesli transcripts are outside the vault, so they are not syncing to
-      the other Mac. Move them in, then re-run bootstrap:
-      mv \"$MUESLI_TRANSCRIPTS\"/* \"$MUESLI_VAULT\"/
-      rmdir \"$MUESLI_TRANSCRIPTS\""
-        return 1
-    fi
-
-    # A dangling or misdirected symlink owns no data, so replacing it is safe.
-    [ -L "$MUESLI_TRANSCRIPTS" ] && rm -f "$MUESLI_TRANSCRIPTS"
-
-    log "Linking muesli transcripts into $MUESLI_VAULT"
-    ln -s "$MUESLI_VAULT" "$MUESLI_TRANSCRIPTS" \
-        || { warn "could not link $MUESLI_TRANSCRIPTS into the vault"; return 1; }
-
-    # Empty vault means this machine has not been joined to Obsidian Sync yet.
-    # muesli will happily fill a directory that syncs nowhere.
-    if [ -z "$(ls -A "$MUESLI_VAULT" 2>/dev/null)" ]; then
-        manual "Open $MUESLI_VAULT as a vault in Obsidian and connect it to Sync,
-      or the transcripts muesli writes stay on this machine only."
-    fi
-}
-
-# The one entry point. Build, link, schedule — a machine that does one without
-# the others is broken in a way that is quiet rather than obvious.
-macos_muesli() {
-    _muesli_install || return 1
-    # Not fatal: a local-only sync still beats no sync, and the warn plus the
-    # manual note above say exactly what is missing.
-    _muesli_vault_link
-    _muesli_sync_agent
-}
-
 # --- tiptree: the OpenClaw workspace as an Obsidian vault ------------------
 #
 # Sheldon's OpenClaw workspace is mirrored into Obsidian Sync as the "Sheldon"
@@ -1110,8 +923,8 @@ OB_BIN="$HOME/.local/share/mise/shims/ob"
 tiptree_obsidian_sync_agent() {
     # WorkingDirectory is load-bearing: `ob sync` resolves which vault it is
     # operating on from the directory it starts in. KeepAlive because unlike
-    # the muesli job this one is resident — `--continuous` never exits, so a
-    # crash should bring it straight back.
+    # the ollama agent this one is a one-shot that must not exit — `--continuous`
+    # runs forever, so a crash should bring it straight back.
     _launch_agent "$OB_LABEL" \
         "    <key>WorkingDirectory</key>  <string>${OB_WORKSPACE}</string>
     <key>KeepAlive</key>         <true/>" \
@@ -1119,8 +932,7 @@ tiptree_obsidian_sync_agent() {
 
     log "  continuous sync running — log: ~/Library/Logs/${OB_LABEL}.log"
     # tiptree is headless and not Sean's machine, so a silently dead sync would
-    # go unnoticed indefinitely. The muesli agent has always carried a check
-    # like this; this one needs it more.
+    # go unnoticed indefinitely, so the run is worth confirming by hand once.
     manual "Confirm the Obsidian sync is actually running on tiptree — nothing
       there will surface a failure locally:
       launchctl print gui/\$(id -u)/${OB_LABEL} | head -20
@@ -1210,7 +1022,6 @@ common_npm
 common_uv
 common_claude_code
 common_ollama
-# muesli is deliberately NOT here — it is verne/lem only, from their arms.
 
 # ---------------------------------------------------------------------------
 # Machine one-offs
@@ -1218,15 +1029,14 @@ common_ollama
 
 case "$HOST" in
     verne)
-        # Either Mac may do the Granola pull; the other picks the transcripts
-        # up through Obsidian Sync. See the muesli block above.
-        macos_muesli
+        # Daily driver. Everything it needs is in the common path — the arm
+        # exists so the primary machine is not reported as unrecognised.
+        log "verne: daily driver — no machine-specific setup needed"
         ;;
     lem)
         # common_ollama starts the service everywhere. What is lem-specific is
         # serving it to the tailnet, which needs an agent brew cannot provide.
         lem_ollama_agent
-        macos_muesli
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
         # wells needs applies here — advertising and admin-console approval
@@ -1278,17 +1088,11 @@ esac
 
 # Queued last so they print closest to the prompt, where they will be read.
 if [ "$OS" = Darwin ]; then
-    # The granola line only on the machines that hold transcripts. Pointing qmd
-    # at a directory muesli never populates yields an empty collection that
-    # looks indexed — worse than an absent one, because searches silently
-    # return nothing rather than erroring.
-    _granola_line=""
-    case "$HOST" in
-        verne|lem) _granola_line="
-      qmd collection add ~/.local/share/muesli/transcripts --name granola" ;;
-    esac
+    # Notes only. Granola meetings moved to msgvault on 2026-08-06 and the
+    # `granola` collection was retired — do not re-add it, since a query
+    # against a missing collection returns nothing rather than erroring.
     manual "Index the notes in qmd:
-      qmd collection add ~/Vaults/Main --name obsidian${_granola_line}
+      qmd collection add ~/Vaults/Main --name obsidian
       qmd update && qmd embed
       See README 'qmd — Local Note Search'."
 fi

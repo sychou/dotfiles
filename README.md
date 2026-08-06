@@ -9,13 +9,11 @@ Only two things vary.
 
 | Host | OS | Role | GUI apps |
 | ---- | -- | ---- | -------- |
-| `verne` | macOS | daily driver + dev; muesli sync | all 29 |
-| `lem` | macOS | daily driver + dev; muesli sync, ollama served to the tailnet, exit node | 28 (no `trezor-suite`) |
+| `verne` | macOS | daily driver + dev | all 29 |
+| `lem` | macOS | daily driver + dev; ollama served to the tailnet, exit node | 28 (no `trezor-suite`) |
 | `tiptree` | macOS | Sheldon's box; OpenClaw (by hand), obsidian-headless syncing the workspace as the "Sheldon" vault | 10 |
 | `wells` | Ubuntu | msgvault server + Gmail sync, exit node | opt-in |
 
-Both Macs that have Granola run the muesli sync and share the result through
-Obsidian Sync, so either one alone keeps the transcripts current.
 
 **1. GUI apps.** Always installed on macOS. On Linux it is a per-machine choice:
 
@@ -80,8 +78,7 @@ yadm clone https://github.com/sychou/dotfiles
 ```
 
 The bootstrap script handles everything else: Homebrew packages, cask apps,
-fonts, mise runtimes, Python tools, and Claude Code — plus Rust and muesli on
-the two Macs that sync Granola. (The
+fonts, mise runtimes, Python tools, and Claude Code. (The
 bootstrap itself re-runs the brew `shellenv` step internally, so it works even
 on a fresh machine.)
 
@@ -422,18 +419,13 @@ Not on Homebrew, so installed as global npm packages after mise sets up node:
 
 - qmd, local markdown search engine (see [qmd](#qmd--local-note-search))
 
+> **Granola meetings are not here any more.** muesli was retired on 2026-08-06.
+> Meetings now sync into msgvault on `wells` via Granola's official API
+> (nightly, 05:15) and are searched with `msgvault`, not `qmd`. The `granola`
+> collection no longer exists.
+
 ### Built from Source
 
-- **muesli** — Granola transcript sync, on `verne` and `lem` only. Built with
-  cargo from [harperreed/muesli](https://github.com/harperreed/muesli), pinned
-  to [PR #6](https://github.com/harperreed/muesli/pull/6). Granola deleted the
-  `storage.dek` the tool authenticated with, so upstream `main` builds a binary
-  whose every sync fails — and upstream deprecated the project three days after
-  that PR was opened rather than merging it, so the pin is the working
-  configuration rather than a stopgap. The bootstrap installs rustup, clones to
-  `~/repos/muesli`, fetches the PR head by number, and rebuilds only when the
-  commit has moved. It also links `~/.local/share/muesli/transcripts` into
-  `~/Vaults/Granola` so Obsidian Sync fans the transcripts to the other Mac.
 - **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash`,
   landing in `~/.local/bin/claude`.
 
@@ -501,16 +493,14 @@ After install, add the note directories as collections and build the index. This
 is a manual post-install step (the bootstrap only prints a reminder):
 
 ```sh
-qmd collection add ~/Vaults/Main --name obsidian                     # Obsidian vault
-qmd collection add ~/.local/share/muesli/transcripts --name granola  # verne/lem only — via muesli
-qmd update                                                           # index files
-qmd embed                                                            # generate embeddings
+qmd collection add ~/Vaults/Main --name obsidian   # Obsidian vault
+qmd update                                        # index files
+qmd embed                                         # generate embeddings
 ```
 
 **The collection names matter.** `~/.claude/CLAUDE.md`, the vault's own
-`CLAUDE.md`, and the qmd skill all reference `-c obsidian` and `-c granola` by
-name. Name them anything else and those documented commands fail with
-`Collection not found`.
+`CLAUDE.md`, and the qmd skill all reference `-c obsidian` by name. Name it
+anything else and those documented commands fail with `Collection not found`.
 
 Naming convention: bare **`obsidian`** always means the Main vault. If a second
 vault is ever indexed, it takes a suffix (`obsidian-work`, etc.) and `obsidian`
@@ -524,7 +514,7 @@ qmd query "what did we decide about X"
 ```
 
 Re-run `qmd update && qmd embed` after notes change. Scope searches to a
-collection with `-c obsidian` or `-c granola`.
+collection with `-c obsidian`.
 
 ### Optional: MCP server
 
