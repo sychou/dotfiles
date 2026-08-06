@@ -178,6 +178,7 @@ macos_formulae() {
         mlx \
         mole \
         mosh \
+        msgvault \
         neovim \
         nerdfetch \
         ntfy \
@@ -737,6 +738,23 @@ common_claude_code() {
     curl -fsSL https://claude.ai/install.sh | bash
 }
 
+# msgvault: the archive itself lives on wells; every other machine runs only
+# the client. The generated agent skills install idempotently, so this is safe
+# to re-run. The client CONFIG does not install itself — ~/.msgvault/config.toml
+# carries the wells API key and is deliberately kept out of dotfiles.
+common_msgvault() {
+    command_exists msgvault || return 0
+    log "Installing the msgvault agent skills"
+    msgvault skills install --agent claude >/dev/null 2>&1 \
+        || warn "msgvault skills install failed"
+    if [ ! -f "$HOME/.msgvault/config.toml" ]; then
+        manual "Copy ~/.msgvault/config.toml from a machine that has it. It points
+      [remote] at wells and carries the API key, so it is secret and not
+      tracked here. Without it, msgvault has no archive to talk to — which
+      also means no email AND no Granola meetings, since both live there."
+    fi
+}
+
 # Every machine gets the same cloud models — they run on ollama.com, so a
 # pull is metadata-only and costs nothing locally. Local models are the
 # opposite: machine-specific by design (what fits lem's GPU has no business
@@ -1021,6 +1039,7 @@ common_mise
 common_npm
 common_uv
 common_claude_code
+common_msgvault
 common_ollama
 
 # ---------------------------------------------------------------------------

@@ -62,6 +62,7 @@ Names that changed over time — needed to search any of the three corpora well,
 
 - Use `trash` instead of `rm` to delete files (sends to macOS Trash)
 - Always quote file and directory names in shell commands (paths often contain spaces and bracketed tags like `[CLOSED]`).
+- Don't guess CLI command syntax — check `--help` (or the man page) before writing commands for a tool or subcommand you haven't verified, especially when giving Sean commands to run himself.
 
 ## Working Style
 
