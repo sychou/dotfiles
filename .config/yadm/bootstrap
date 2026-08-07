@@ -989,11 +989,18 @@ tiptree_obsidian_headless() {
         ob sync-create-remote --name "$OB_VAULT"
     fi
 
-    # A .obsidian directory in the workspace is the marker that sync-setup has
-    # already linked this folder; running it again re-prompts for the password.
-    if [ ! -d "$OB_WORKSPACE/.obsidian" ]; then
+    # Ask ob whether this folder is linked rather than inferring it from a
+    # .obsidian directory. That inference was wrong on the first real run:
+    # tiptree's workspace had an EMPTY .obsidian, so the guard skipped
+    # sync-setup, and the agent would have been installed against an unlinked
+    # folder — syncing nothing, reporting success. A directory Obsidian creates
+    # for its own reasons says nothing about Sync being configured.
+    if ob sync-status --path "$OB_WORKSPACE" >/dev/null 2>&1; then
+        log "$OB_WORKSPACE is already linked to a remote vault"
+    else
         log "Linking $OB_WORKSPACE to the '$OB_VAULT' vault"
-        ob sync-setup --vault "$OB_VAULT" --path "$OB_WORKSPACE"
+        ob sync-setup --vault "$OB_VAULT" --path "$OB_WORKSPACE" \
+            || { warn "could not link $OB_WORKSPACE to '$OB_VAULT'"; return 1; }
     fi
 
     tiptree_obsidian_sync_agent
