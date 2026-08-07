@@ -100,6 +100,32 @@ Backups live on wells' **internal** NVMe while the archive sits on the external
 USB disk, so a failure of either device does not take both. lem holds the
 offsite copy in the other house.
 
+## Job reporting (MQTT)
+
+Scheduled jobs publish their outcome to the Mosquitto broker on `bradbury`; Home
+Assistant decides what deserves an alert. Scripts say *what happened*, and
+notification policy lives in one place instead of being hardcoded into each job.
+
+- **`bin/report-mqtt <job> <result> [detail]`** publishes retained JSON to
+  `homelab/<host>/<job>/status`. Retained matters — the last known state of every
+  job is one subscribe away rather than several logs on several machines.
+- **Fire-and-forget**: an unreachable broker warns on stderr and still exits 0.
+  Reporting must never fail the job it reports on.
+- **zsh, not sh, deliberately** — zsh sources `~/.zshenv` for non-interactive
+  shells, which is what puts `MQTT_USER`/`MQTT_PASS` in scope under cron and
+  launchd. A `#!/bin/sh` version would need credentials passed in.
+- **Credentials are per-machine**, username = hostname, in `~/.zshenv.local`
+  (untracked, mode 600). 1Password holds `mqtt-<host>` items as the recoverable
+  source of truth, but it is not the runtime source: these jobs run when nobody
+  is present to unlock a session.
+- **`MQTT_HOST`** overrides the broker address. The Purnell machines find it on
+  the LAN; `wells` pins the tailnet address, because probing an unreachable LAN
+  first cost it a full TCP timeout on every publish.
+
+The alert worth having is **absence**, not failure: `msgvault nightly went
+silent` fires when nothing has reported in 26 hours. A failure alert can only
+fire when something publishes a failure, so it cannot see a job that never ran.
+
 ## Setting Up a New Mac
 
 Remove all apps from Dock (personal preference).

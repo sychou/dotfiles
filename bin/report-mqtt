@@ -55,9 +55,12 @@ if [[ ! -x $pub ]]; then
   exit 0
 fi
 
-# ISO-8601 with offset, so a reader never has to guess the timezone. That
-# ambiguity has already cost us once: msgvault reports UTC while cron is CDT.
-now=$(date +%Y-%m-%dT%H:%M:%S%z)
+# UTC with a Z suffix, deliberately. `date +%z` emits "-0500", which is not
+# strict ISO-8601 and Home Assistant's timestamp parsing rejects it; GNU date
+# has %:z for "-05:00" but BSD date does not, and this runs on both. UTC also
+# ends the timezone guessing that has already cost us once — msgvault reports
+# UTC while cron runs in CDT.
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 payload=$(printf '{"job":"%s","host":"%s","result":"%s","at":"%s","detail":"%s"}' \
   "$job" "$host" "$result" "$now" "${detail//\"/\\\"}")
