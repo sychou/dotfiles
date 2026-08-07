@@ -59,7 +59,13 @@ fi
 # ---------------------------------------------------------------------------
 
 typeset -g ZSHENV_LOCAL=${HOME}/.zshenv.local
-typeset -ga ZSHENV_REQUIRED=(OPENAI_API_KEY OLLAMA_API_KEY GOG_KEYRING_PASSWORD)
+# MQTT_USER/MQTT_PASS are per-machine broker credentials, not shared: the
+# username is the hostname, so broker logs attribute every publish to a host and
+# one machine can be revoked without touching the others. They live here rather
+# than in 1Password because the jobs that publish run unattended from cron and
+# launchd, where no op session exists. Scripts reach them by being zsh with a
+# proper shebang — zsh sources ~/.zshenv for non-interactive shells too.
+typeset -ga ZSHENV_REQUIRED=(OPENAI_API_KEY OLLAMA_API_KEY GOG_KEYRING_PASSWORD MQTT_USER MQTT_PASS)
 
 if [[ ! -r $ZSHENV_LOCAL ]]; then
   (

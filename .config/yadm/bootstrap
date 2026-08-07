@@ -178,6 +178,7 @@ macos_formulae() {
         mlx \
         mole \
         mosh \
+        mosquitto \
         msgvault \
         neovim \
         nerdfetch \
@@ -293,6 +294,7 @@ ubuntu_apt() {
         build-essential ca-certificates curl gnupg wget unzip \
         git htop jq mosh ripgrep tmux tree fzf yadm openssl libssl-dev \
         bat fd-find trash-cli lua5.4 zsh \
+        mosquitto-clients \
         wl-clipboard xclip \
         unattended-upgrades
 
