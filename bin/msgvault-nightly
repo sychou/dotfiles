@@ -25,6 +25,11 @@
 emulate -L zsh
 setopt no_unset pipefail
 
+# EPOCHSECONDS lives in zsh/datetime and is NOT available by default. Without
+# this the script dies on its first timing call — and `zsh -n` will not catch
+# it, because a syntax check never evaluates a parameter.
+zmodload zsh/datetime
+
 MSGVAULT=${MSGVAULT:-$HOME/.local/bin/msgvault}
 LOG=${MSGVAULT_NIGHTLY_LOG:-/srv/data/msgvault/nightly.log}
 GRANOLA_SOURCE=${GRANOLA_SOURCE:-isomer-meetings}
@@ -35,7 +40,8 @@ started=$EPOCHSECONDS
 mkdir -p "${LOG:h}" 2>/dev/null
 
 exec >> "$LOG" 2>&1
-print "\n=== msgvault-nightly $(date +%Y-%m-%dT%H:%M:%S%z) ==="
+print
+print -r -- "=== msgvault-nightly $(date +%Y-%m-%dT%H:%M:%S%z) ==="
 
 if [[ ! -x $MSGVAULT ]]; then
   print "FATAL: $MSGVAULT not found"
@@ -55,7 +61,7 @@ count_messages() {
 run_step() {  # name, then command
   local name=$1; shift
   local t0=$EPOCHSECONDS
-  print "--- $name"
+  print -r -- "--- $name"
   if "$@"; then
     print "    ok (${$(( EPOCHSECONDS - t0 ))}s)"
   else
@@ -91,7 +97,7 @@ fi
 detail="+$(( after - before )) msgs, ${elapsed}s, snapshot ${snapshot:-none}"
 (( $#failed )) && detail="$detail, failed: ${(j:,:)failed}"
 
-print "result: $result — $detail"
+print -r -- "result: $result — $detail"
 "$HOME/bin/report-mqtt" msgvault-nightly "$result" "$detail"
 
 [[ $result == failed ]] && exit 1
