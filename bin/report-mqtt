@@ -1,0 +1,75 @@
+#!/bin/zsh
+# report-mqtt — publish a job result to the MQTT broker on bradbury.
+#
+# Named for its transport, not its purpose: a report-ntfy sibling will carry the
+# fallback path for wells, which cannot reach the Purnell broker when the
+# tailnet or bradbury is down.
+#
+#   report-mqtt <job> <result> [detail]
+#   report-mqtt msgvault-nightly ok "514606 messages, snapshot 20260807T..."
+#   report-mqtt msgvault-nightly failed "sync-granola exited 1"
+#
+# Publishes retained JSON to homelab/<host>/<job>/status so the LAST KNOWN state
+# of every job is always queryable — "did last night work?" becomes one
+# subscribe rather than correlating logs across machines and timezones.
+#
+# zsh, not sh, and deliberately: zsh sources ~/.zshenv for non-interactive
+# shells, which is what puts MQTT_USER/MQTT_PASS in scope under cron and
+# launchd. A #!/bin/sh version would need the credentials passed in.
+#
+# FIRE AND FORGET. Reporting must never fail the job it reports on: a broker
+# outage should not fail a backup that otherwise succeeded. Every failure path
+# here warns to stderr and exits 0.
+
+emulate -L zsh
+setopt no_unset
+
+job=${1:?usage: report-mqtt <job> <result> [detail]}
+result=${2:?usage: report-mqtt <job> <result> [detail]}
+detail=${3:-}
+
+host=${HOST:-$(hostname -s)}
+host=${host%%.*}
+
+# Credentials come from ~/.zshenv.local via ~/.zshenv. If they are missing the
+# shell has already warned; say so once here and leave rather than publishing
+# anonymously, which the broker would reject anyway.
+if [[ -z ${MQTT_USER:-} || -z ${MQTT_PASS:-} ]]; then
+  print -u2 "report-mqtt: MQTT_USER/MQTT_PASS unset — not reporting '$job'"
+  exit 0
+fi
+
+# bradbury is on the Purnell LAN; wells reaches it over the tailnet. Try the LAN
+# first so co-located machines do not take a needless tailnet hop, then fall
+# back. MQTT_HOST overrides both.
+typeset -a brokers
+if [[ -n ${MQTT_HOST:-} ]]; then
+  brokers=("$MQTT_HOST")
+else
+  brokers=(192.168.4.25 100.66.107.50)
+fi
+
+pub=${commands[mosquitto_pub]:-/opt/homebrew/bin/mosquitto_pub}
+if [[ ! -x $pub ]]; then
+  print -u2 "report-mqtt: mosquitto_pub not found — not reporting '$job'"
+  exit 0
+fi
+
+# ISO-8601 with offset, so a reader never has to guess the timezone. That
+# ambiguity has already cost us once: msgvault reports UTC while cron is CDT.
+now=$(date +%Y-%m-%dT%H:%M:%S%z)
+
+payload=$(printf '{"job":"%s","host":"%s","result":"%s","at":"%s","detail":"%s"}' \
+  "$job" "$host" "$result" "$now" "${detail//\"/\\\"}")
+
+for broker in $brokers; do
+  if $pub -h "$broker" -p "${MQTT_PORT:-1883}" -u "$MQTT_USER" -P "$MQTT_PASS" \
+       -t "homelab/${host}/${job}/status" -m "$payload" -r 2>/dev/null; then
+    exit 0
+  fi
+done
+
+# Both paths failed. Worth saying out loud — a silent reporter is worse than no
+# reporter, because the absence of alerts then means nothing.
+print -u2 "report-mqtt: could not reach any broker (${brokers}) — '$job' went unreported"
+exit 0

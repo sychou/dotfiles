@@ -555,6 +555,28 @@ EOF
     fi
 }
 
+# Install (or update) a cron entry, keyed on a marker comment so re-running
+# bootstrap neither duplicates it nor disturbs entries added by hand. wells
+# already carries jobs that predate this file; clobbering the crontab would
+# silently drop them.
+#
+#   _cron_entry <marker> <schedule> <command>
+_cron_entry() {
+    local marker=$1 schedule=$2 command=$3
+    local tag="# yadm-bootstrap: $marker"
+    local current; current=$(crontab -l 2>/dev/null || true)
+
+    if printf '%s\n' "$current" | grep -qF "$tag"; then
+        log "cron entry '$marker' already installed"
+        return 0
+    fi
+
+    log "Installing cron entry '$marker'"
+    { printf '%s\n' "$current" | grep -v '^$'
+      printf '%s\n%s %s\n' "$tag" "$schedule" "$command"
+    } | crontab - || warn "could not install the '$marker' cron entry"
+}
+
 ubuntu_gui() {
     # Minimal desktop for local management, not a full workstation. Adds a
     # display stack and its update surface to a machine that is mostly reached
@@ -851,6 +873,32 @@ PLIST
     return 1
 }
 
+# --- lem: pull the msgvault backup repo from wells --------------------------
+#
+# wells holds the archive and writes snapshots to its own internal drive; lem
+# keeps an offsite copy in the other house. The repo is content-addressed, so
+# this is genuinely incremental — after the first ~91G seed only new packs
+# cross the tailnet, and a night that adds 45,000 messages moved 4.1G.
+#
+# 07:00, an hour after wells' nightly snapshot at 06:00, so a run always
+# replicates a finished snapshot rather than a half-written one.
+MSGVAULT_PULL_LABEL="com.sychou.msgvault-repo-sync"
+
+lem_msgvault_repo_pull() {
+    # StartCalendarInterval, not StartInterval: this wants a specific hour
+    # relative to wells' cron, not "every N seconds from whenever it loaded".
+    _launch_agent "$MSGVAULT_PULL_LABEL" \
+        "    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>    <integer>7</integer>
+        <key>Minute</key>  <integer>0</integer>
+    </dict>" \
+        /usr/bin/rsync -a --partial \
+        "wells:/home/sean/backups/msgvault/" "$HOME/Backups/msgvault/" || return 1
+
+    log "  pulling wells' backup repo nightly at 07:00"
+}
+
 # --- lem: ollama as the tailnet's inference host ----------------------------
 #
 # lem holds the local models nothing else here can run — an M4 Pro with ~52 GiB
@@ -1065,6 +1113,7 @@ case "$HOST" in
         # common_ollama starts the service everywhere. What is lem-specific is
         # serving it to the tailnet, which needs an agent brew cannot provide.
         lem_ollama_agent
+        lem_msgvault_repo_pull
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
         # wells needs applies here — advertising and admin-console approval
@@ -1081,6 +1130,11 @@ case "$HOST" in
         ;;
     wells)
         ubuntu_exit_node_tuning
+        # One ordered pass over every sync, then the backup — replacing the
+        # separate calendar/Granola/backup entries that were sequenced only by
+        # guessed timings. 06:00 leaves the daemon-scheduled mail syncs
+        # (02/03/04, in msgvault's own config) clear ahead of it.
+        _cron_entry msgvault-nightly "0 6 * * *" "$HOME/bin/msgvault-nightly"
         # Advertising is only half of it — traffic routes nowhere until the
         # node is approved. If the join above already happened without the
         # flag, `tailscale set` adds it without disturbing the session.

@@ -1,0 +1,98 @@
+#!/bin/zsh
+# msgvault-nightly — one ordered pass over every msgvault sync, then a backup.
+#
+# Replaces three separate cron entries — calendar, Granola, backup — that were
+# sequenced only by guessed times. Nothing enforced the order; each was
+# scheduled late enough that the previous one had *probably* finished. That
+# held until it didn't: a long sync during the Gmail backfill would have run
+# straight through the window the next job assumed was free.
+#
+# The mail syncs at 02/03/04 stay where they are, in msgvault's own
+# config.toml, deliberately. Keeping them means email still syncs if this
+# script never runs, and `msgvault sync` here is then a cheap incremental
+# catch-up that pulls in anything since 04:00 before the snapshot is taken.
+#
+# Here each step waits for the previous one, and the whole run reports once.
+#
+# Failure policy: a failed SYNC does not abort the run. A stale-but-complete
+# archive is still worth snapshotting, and refusing to back up because Granola
+# was unreachable would be the wrong trade. But the result is reported as
+# "degraded" and the log says which step failed, so a bad night is never
+# indistinguishable from a good one. A failed BACKUP is a hard failure.
+#
+# zsh so that ~/.zshenv puts MQTT_USER/MQTT_PASS in scope under cron.
+
+emulate -L zsh
+setopt no_unset pipefail
+
+MSGVAULT=${MSGVAULT:-$HOME/.local/bin/msgvault}
+LOG=${MSGVAULT_NIGHTLY_LOG:-/srv/data/msgvault/nightly.log}
+GRANOLA_SOURCE=${GRANOLA_SOURCE:-isomer-meetings}
+CAL_ACCOUNT=${CAL_ACCOUNT:-sean@choufam.com}
+
+typeset -a failed
+started=$EPOCHSECONDS
+mkdir -p "${LOG:h}" 2>/dev/null
+
+exec >> "$LOG" 2>&1
+print "\n=== msgvault-nightly $(date +%Y-%m-%dT%H:%M:%S%z) ==="
+
+if [[ ! -x $MSGVAULT ]]; then
+  print "FATAL: $MSGVAULT not found"
+  "$HOME/bin/report-mqtt" msgvault-nightly failed "msgvault binary missing at $MSGVAULT"
+  exit 1
+fi
+
+# Message count before and after, so the log says what actually changed rather
+# than only that commands exited zero. A sync that "succeeds" while importing
+# nothing is the failure worth catching.
+count_messages() {
+  $MSGVAULT query "SELECT COUNT(*) FROM messages" 2>/dev/null \
+    | grep -viE '^time=' | python3 -c 'import json,sys; print(json.load(sys.stdin)["rows"][0][0])' 2>/dev/null \
+    || print 0
+}
+
+run_step() {  # name, then command
+  local name=$1; shift
+  local t0=$EPOCHSECONDS
+  print "--- $name"
+  if "$@"; then
+    print "    ok (${$(( EPOCHSECONDS - t0 ))}s)"
+  else
+    print "    FAILED (${$(( EPOCHSECONDS - t0 ))}s)"
+    failed+=("$name")
+  fi
+}
+
+before=$(count_messages)
+print "messages before: $before"
+
+run_step sync            $MSGVAULT sync
+run_step sync-calendar   $MSGVAULT sync-calendar --min-access-role owner "$CAL_ACCOUNT"
+run_step sync-granola    $MSGVAULT sync-granola "$GRANOLA_SOURCE"
+
+after=$(count_messages)
+print "messages after:  $after  (+$(( after - before )))"
+
+# The backup runs even when a sync failed — see the failure policy above.
+run_step backup $MSGVAULT backup create --tag nightly
+
+elapsed=$(( EPOCHSECONDS - started ))
+snapshot=$($MSGVAULT backup list 2>/dev/null | grep -viE '^time=' | tail -1 | awk '{print $1}')
+
+if (( ${failed[(I)backup]} )); then
+  result=failed
+elif (( $#failed )); then
+  result=degraded
+else
+  result=ok
+fi
+
+detail="+$(( after - before )) msgs, ${elapsed}s, snapshot ${snapshot:-none}"
+(( $#failed )) && detail="$detail, failed: ${(j:,:)failed}"
+
+print "result: $result — $detail"
+"$HOME/bin/report-mqtt" msgvault-nightly "$result" "$detail"
+
+[[ $result == failed ]] && exit 1
+exit 0
