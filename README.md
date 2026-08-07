@@ -2,6 +2,32 @@
 
 These dotfiles are managed by [yadm](https://yadm.io/).
 
+## Repository access
+
+The repo went private on 2026-08-05, so every machine has to prove who it is to
+pull. There is no single method, because the machines differ in what they can
+do unattended:
+
+| Host | Method | Why |
+| ---- | ------ | --- |
+| `lem` | HTTPS + `gh` credential helper | 1Password requires interactive approval to *sign*, so SSH cannot run unattended here |
+| `verne` | SSH + 1Password agent | its agent signs without prompting |
+| `wells` | SSH + read-only deploy key | headless, no 1Password, and `gh` tokens expire silently |
+| `tiptree` | SSH + read-only deploy key | not Sean's GitHub account |
+
+Deploy keys are the right tool for the last two: scoped to this one repo,
+read-only so the machine can never push, revocable without touching anyone's
+account, and tied to the machine rather than to a person.
+
+**The failure mode is silence.** `yadm fetch -q` swallows an auth error, so a
+machine that cannot authenticate reports "0 commits behind" while drifting.
+`common_repo_access` in the bootstrap tests this up front and prints the remedy.
+
+Per-machine key selection lives in `~/.ssh/config.local`, which the tracked
+`~/.ssh/config` includes **first** — ssh takes the first value it finds for each
+keyword, so a local override wins over the shared `github.com` block. That block
+points at a 1Password-held key that exists only on Sean's own machines.
+
 ## Machines
 
 Every machine gets the **same tracked configs and the same core CLI toolchain**.
@@ -12,7 +38,7 @@ Only two things vary.
 | `verne` | macOS | daily driver + dev | all 29 |
 | `lem` | macOS | daily driver + dev; ollama served to the tailnet, exit node | 28 (no `trezor-suite`) |
 | `tiptree` | macOS | Sheldon's box; OpenClaw (by hand), obsidian-headless syncing the workspace as the "Sheldon" vault | 10 |
-| `wells` | Ubuntu | msgvault server + Gmail sync, exit node | opt-in |
+| `wells` | Ubuntu | msgvault server + Gmail sync, nightly archive pipeline, exit node | opt-in |
 
 
 **1. GUI apps.** Always installed on macOS. On Linux it is a per-machine choice:
@@ -38,6 +64,41 @@ exclusions are opt-in per host.
 > **The bootstrap never uninstalls.** The per-machine cask lists control what
 > gets *installed*, not what gets removed. A machine that already has extra apps
 > keeps them until you `brew uninstall --cask` them yourself.
+
+## Nightly archive pipeline (`wells`)
+
+`bin/msgvault-nightly` runs one ordered pass and reports once:
+
+```text
+02:00 / 03:00 / 04:00   mail sync per account   (msgvault daemon, config.toml)
+06:00                   msgvault-nightly        (cron)
+                          sync -> calendar -> Granola -> backup snapshot
+07:00                   repo pull to lem        (launchd on lem)
+```
+
+It replaced three separate cron entries sequenced only by guessed times — each
+scheduled late enough that the previous had *probably* finished. That held until
+a long sync during the Gmail backfill would have run straight through the next
+job's window.
+
+The mail syncs stay in `config.toml` deliberately: email still syncs if the
+script never runs, and the script's `sync` step is then a cheap incremental
+catch-up before the snapshot is taken.
+
+A failed **sync** does not abort the run — a stale-but-complete archive is still
+worth snapshotting — but the result reports as `degraded` and names the failed
+step, so a bad night is never indistinguishable from a good one. A failed
+**backup** is fatal.
+
+Results publish over MQTT via `bin/report-mqtt` as retained JSON on
+`homelab/<host>/<job>/status`, so the last known state of every job is one
+subscribe away rather than five logs across two machines and two timezones.
+Reporting is fire-and-forget: an unreachable broker warns and still exits 0,
+because it must never fail the backup it reports on.
+
+Backups live on wells' **internal** NVMe while the archive sits on the external
+USB disk, so a failure of either device does not take both. lem holds the
+offsite copy in the other house.
 
 ## Setting Up a New Mac
 

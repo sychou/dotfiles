@@ -709,6 +709,50 @@ common_zsh() {
     fi
 }
 
+# The dotfiles repo went private on 2026-08-05, and every machine has since had
+# to prove who it is. That broke differently on each one and was rediscovered
+# three times, so bootstrap now checks up front and says what to do.
+#
+# There is no single right answer, because the machines genuinely differ:
+#
+#   lem      HTTPS + the gh credential helper. SSH does NOT work unattended
+#            here — 1Password requires interactive approval to *sign*, so
+#            listing keys succeeds while signing fails.
+#   verne    SSH + the 1Password agent, which signs without prompting.
+#   wells    SSH + a read-only repo deploy key. Headless, no 1Password, and gh
+#            tokens expire silently.
+#   tiptree  SSH + a read-only repo deploy key. Not Sean's account at all.
+#
+# A failed fetch is quiet in the worst way: `yadm fetch -q` swallows the error,
+# and the machine then reports "0 commits behind" while being ten behind.
+common_repo_access() {
+    command_exists yadm || return 0
+
+    if yadm ls-remote origin HEAD >/dev/null 2>&1; then
+        return 0
+    fi
+
+    warn "this machine cannot reach the dotfiles remote — it will silently stop updating"
+    manual "Restore dotfiles access. \`yadm fetch\` fails here, and a failed fetch
+      reports success, so the machine drifts without saying so.
+
+      For a machine with an unattended-signing key or a working gh login:
+        gh auth login                       # or fix the existing token
+
+      For a headless box, or one that is not on Sean's account, use a
+      read-only repo deploy key — narrower than a token and revocable alone:
+        ssh-keygen -t ed25519 -C \"\$(hostname -s)-dotfiles\" -f ~/.ssh/id_dotfiles -N ''
+        cat ~/.ssh/id_dotfiles.pub
+      Add that at github.com/sychou/dotfiles -> Settings -> Deploy keys, WITHOUT
+      write access, then point the remote and key at each other:
+        yadm remote set-url origin git@github.com:sychou/dotfiles.git
+        printf 'Host github.com\\n    IdentityFile ~/.ssh/id_dotfiles\\n    IdentitiesOnly yes\\n' \\
+          >> ~/.ssh/config.local
+      (~/.ssh/config.local is included FIRST by the tracked ssh config, so it
+      overrides the shared github.com block, which points at a 1Password key
+      that exists only on Sean's own machines.)"
+}
+
 # Runtimes are declared in the tracked .config/mise/config.toml, NOT here.
 # `mise use --global` writes to that same file, so listing them here too meant
 # bootstrap overwriting a config yadm already manages — two declarations that
@@ -1091,6 +1135,7 @@ case "$OS" in
         ;;
 esac
 
+common_repo_access
 common_zsh
 common_mise
 common_npm
