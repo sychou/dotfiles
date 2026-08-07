@@ -70,12 +70,51 @@ run_step() {  # name, then command
   fi
 }
 
+# Granola partial failures are routine, not breakage. A meeting still in
+# progress has a note that cannot be fetched cleanly, so the sync exits non-zero
+# with "partial Granola sync: N note(s) failed" — and the next run picks it up.
+# Treating that as a failure would mean the pipeline cried wolf most nights,
+# which is how alerts get ignored.
+#
+# The count is still carried into the report rather than swallowed: one or two
+# means someone is in a meeting, but a large number means something else, and
+# the difference should not be invisible.
+GRANOLA_PARTIAL_TOLERANCE=${GRANOLA_PARTIAL_TOLERANCE:-3}
+granola_partial=0
+
+run_granola() {
+  local t0=$EPOCHSECONDS out rc n
+  print -r -- "--- sync-granola"
+  out=$($MSGVAULT sync-granola "$GRANOLA_SOURCE" 2>&1); rc=$?
+  print -r -- "$out"
+
+  if (( rc == 0 )); then
+    print -r -- "    ok (${$(( EPOCHSECONDS - t0 ))}s)"
+    return 0
+  fi
+
+  if [[ $out == *"partial Granola sync:"* ]]; then
+    n=$(print -r -- "$out" | grep -oE 'partial Granola sync: [0-9]+' | grep -oE '[0-9]+$' | tail -1)
+    n=${n:-0}
+    if (( n <= GRANOLA_PARTIAL_TOLERANCE )); then
+      granola_partial=$n
+      print -r -- "    ok despite $n partial note(s) — expected for meetings in progress (${$(( EPOCHSECONDS - t0 ))}s)"
+      return 0
+    fi
+    print -r -- "    FAILED: $n partial notes exceeds tolerance of $GRANOLA_PARTIAL_TOLERANCE (${$(( EPOCHSECONDS - t0 ))}s)"
+  else
+    print -r -- "    FAILED (${$(( EPOCHSECONDS - t0 ))}s)"
+  fi
+  failed+=(sync-granola)
+  return 1
+}
+
 before=$(count_messages)
 print "messages before: $before"
 
 run_step sync            $MSGVAULT sync
 run_step sync-calendar   $MSGVAULT sync-calendar --min-access-role owner "$CAL_ACCOUNT"
-run_step sync-granola    $MSGVAULT sync-granola "$GRANOLA_SOURCE"
+run_granola
 
 after=$(count_messages)
 print "messages after:  $after  (+$(( after - before )))"
@@ -95,6 +134,7 @@ else
 fi
 
 detail="+$(( after - before )) msgs, ${elapsed}s, snapshot ${snapshot:-none}"
+(( granola_partial )) && detail="$detail, ${granola_partial} granola note(s) deferred"
 (( $#failed )) && detail="$detail, failed: ${(j:,:)failed}"
 
 print -r -- "result: $result — $detail"
