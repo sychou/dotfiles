@@ -1,0 +1,171 @@
+#!/bin/zsh
+# health-check — verify a machine is healthy, then ping Healthchecks.io.
+#
+# Replaces a bare `curl` heartbeat with a meaningful one: if disk, load, or
+# memory cross threshold, the ping goes to /fail with a detail string, and a
+# direct Pushover notification fires with the specifics. All-clear pings the
+# success endpoint, so the same Healthchecks check covers both "down" and
+# "distressed."
+#
+# Designed to run from cron/launchd every 15 min alongside (or replacing) the
+# plain heartbeat. zsh so ~/.zshenv puts MQTT/Pushover credentials in scope.
+#
+#   health-check <check-uuid> [--pushover]
+#
+# The --pushover flag sends a direct Pushover on distress (in addition to the
+# Healthchecks /fail, which routes to Pushover via the channel integration).
+# Useful when you want the detail string immediately, not just "check went
+# down."  Requires PUSHOVER_USER_KEY and PUSHOVER_APP_TOKEN in the env.
+#
+# Thresholds (override via env):
+#   DISK_THRESHOLD=90    (% used, per real filesystem)
+#   LOAD_THRESHOLD=auto  (defaults to # CPU cores)
+#   MEM_THRESHOLD=90     (% used)
+#
+# Exits 0 on all-clear, 1 on distress. Either way it pings — the exit code is
+# for the caller, not for silencing the report.
+
+emulate -L zsh
+setopt no_unset pipefail
+
+zmodload zsh/datetime  # EPOCHSECONDS
+
+## --- config ----------------------------------------------------------
+
+CHECK_UUID="${1:?usage: health-check <check-uuid> [--pushover]}"
+shift
+[[ "${1:-}" == "--pushover" ]] && SEND_PUSHOVER=1 || SEND_PUSHOVER=0
+
+DISK_THRESHOLD=${DISK_THRESHOLD:-90}
+MEM_THRESHOLD=${MEM_THRESHOLD:-90}
+
+typeset -a issues
+
+## --- platform detection ----------------------------------------------
+
+OS=$(uname -s)
+if [[ $OS == "Darwin" ]]; then
+  CPU_CORES=$(sysctl -n hw.ncpu)
+elif [[ $OS == "Linux" ]]; then
+  CPU_CORES=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo)
+else
+  CPU_CORES=4
+fi
+LOAD_THRESHOLD=${LOAD_THRESHOLD:-$CPU_CORES}
+
+HC_URL="https://hc-ping.com/$CHECK_UUID"
+
+## --- checks ----------------------------------------------------------
+
+check_disk() {
+  # Real filesystems only — skip synthetic volumes, tmpfs, overlay, etc.
+  if [[ $OS == "Darwin" ]]; then
+    # macOS: only / and /System/Volumes/Data are real. Skip VM, Preboot,
+    # xarts, iSCPreboot, Hardware, devfs, and the read-only system volume.
+    df -h 2>/dev/null | awk 'NR>1 && $1 ~ /^\// {print $5, $9, $1}' | while read -r pct mount dev; do
+      pct=${pct%\%}
+      case "$mount" in
+        /System/Volumes/VM|/System/Volumes/Preboot|/System/Volumes/xarts|/System/Volumes/iSCPreboot|/System/Volumes/Hardware) continue ;;
+        /System/Volumes/Data|/) ;; # real — check these
+        /System/Volumes/*) continue ;; # other synthetic
+        *) ;;
+      esac
+      if (( pct > DISK_THRESHOLD )); then
+        echo "disk ${mount} at ${pct}% (${dev})"
+      fi
+    done
+  else
+    # Linux: exclude pseudo-filesystems. Use -P to prevent line wrapping
+    # and ensure consistent columns. Skip tmpfs, devtmpfs, squashfs, none,
+    # efivarfs, and /boot/efi.
+    df -hP 2>/dev/null | awk 'NR>1 && $1 !~ /^(tmpfs|devtmpfs|squashfs|none|efivarfs|overlay)$/ && $6 !~ /^\/boot/ {print $5, $6, $1}' | while read -r pct mount dev; do
+      pct=${pct%\%}
+      if (( pct > DISK_THRESHOLD )); then
+        echo "disk ${mount} at ${pct}% (${dev})"
+      fi
+    done
+  fi
+}
+
+check_load() {
+  local la1
+  if [[ $OS == "Darwin" ]]; then
+    la1=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print $1}')
+  else
+    la1=$(awk '{print $1}' /proc/loadavg 2>/dev/null)
+  fi
+  la1=${la1:-0}
+  # Float comparison via awk: exit 0 (true) if la1 > threshold
+  if awk -v a="$la1" -v b="$LOAD_THRESHOLD" 'BEGIN{exit !(a > b)}'; then
+    echo "load ${la1} exceeds ${LOAD_THRESHOLD} (${CPU_CORES} cores)"
+  fi
+}
+
+check_memory() {
+  local pct
+  if [[ $OS == "Darwin" ]]; then
+    local page_size free active inactive wired speculative compressed used_pages total
+    page_size=$(sysctl -n hw.pagesize 2>/dev/null || echo 4096)
+    local stats
+    stats=$(vm_stat 2>/dev/null)
+    active=$(echo "$stats" | awk '/Pages active/ {gsub(/\./,"",$3); print $3}')
+    inactive=$(echo "$stats" | awk '/Pages inactive/ {gsub(/\./,"",$3); print $3}')
+    speculative=$(echo "$stats" | awk '/Pages speculative/ {gsub(/\./,"",$3); print $3}')
+    wired=$(echo "$stats" | awk '/Pages wired down/ {gsub(/\./,"",$4); print $4}')
+    compressed=$(echo "$stats" | awk '/Pages occupied by compressor/ {gsub(/\./,"",$6); print $6}')
+    free=$(echo "$stats" | awk '/Pages free/ {gsub(/\./,"",$3); print $3}')
+
+    active=${active:-0}; inactive=${inactive:-0}; speculative=${speculative:-0}
+    wired=${wired:-0}; compressed=${compressed:-0}; free=${free:-0}
+
+    used_pages=$((active + wired + compressed + speculative))
+    total=$((used_pages + inactive + free))
+    if (( total > 0 )); then
+      pct=$(( used_pages * 100 / total ))
+    else
+      pct=0
+    fi
+  else
+    local total memavail
+    total=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+    memavail=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || awk '/MemFree:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+    if (( total > 0 )); then
+      pct=$(( (total - memavail) * 100 / total ))
+    else
+      pct=0
+    fi
+  fi
+  if (( pct > MEM_THRESHOLD )); then
+    echo "memory at ${pct}%"
+  fi
+}
+
+## --- run ------------------------------------------------------------
+
+issues+=("${(@f)$(check_disk)}")
+issues+=("${(@f)$(check_load)}")
+issues+=("${(@f)$(check_memory)}")
+
+# Remove empty elements
+issues=("${(@)issues:#}")
+
+if (( $#issues )); then
+  detail="${(j:; :)issues}"
+  # Ping /fail
+  curl -fsS -m 10 --retry 3 "${HC_URL}/fail" --data-urlencode "msg=$detail" >/dev/null 2>&1
+  # Direct Pushover (optional, for immediate detail)
+  if (( SEND_PUSHOVER )) && [[ -n "${PUSHOVER_USER_KEY:-}" && -n "${PUSHOVER_APP_TOKEN:-}" ]]; then
+    curl -fsS -m 10 --retry 3 \
+      -F "token=${PUSHOVER_APP_TOKEN}" \
+      -F "user=${PUSHOVER_USER_KEY}" \
+      -F "message=$(hostname): ${detail}" \
+      -F "priority=1" \
+      https://api.pushover.net/1/messages.json >/dev/null 2>&1
+  fi
+  print -r -- "$(hostname): DISTRESS — ${detail}"
+  exit 1
+else
+  # All clear — ping success
+  curl -fsS -m 10 --retry 3 "${HC_URL}" >/dev/null 2>&1
+  exit 0
+fi
