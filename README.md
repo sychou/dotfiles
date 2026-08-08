@@ -279,11 +279,59 @@ new shell fails loudly, by design.
 .zshrc
 README.md
 bin/fzf-preview.sh
+bin/health-check
+bin/msgvault-nightly
+bin/report-mqtt
 ```
 
-## zsh
+## Infrastructure monitoring (Healthchecks.io + Pushover)
 
-Four files are tracked. Which ones a given shell runs depends on whether it is
+Independent of the MQTT reporting layer above, a hosted **Healthchecks.io**
+dead-man's-switch watches the always-on machines and the nightly jobs. If a
+check doesn't hear from its pinger within the grace period, Healthchecks
+fires the **Pushover** channel (emergency priority — retry-until-ack,
+bypasses DND/Focus), which is deliberately off-path: it reaches the phone
+over cellular, so it survives HA being down and home internet being down.
+
+**`bin/health-check`** (in the dotfiles repo, so every machine has it) is
+a portable zsh script that checks disk, load, and memory against
+configurable thresholds before pinging. All-clear pings the success
+endpoint; any threshold exceeded pings `/fail` with the detail string and
+sends a direct Pushover with the specifics (e.g. "wells: disk / at 94%").
+This means a Healthchecks check covers both "down" and "distressed" — not
+just "is the machine on."
+
+```sh
+health-check <check-uuid> [--pushover]
+```
+
+Thresholds (override via env): `DISK_THRESHOLD=90` (% used, per real
+filesystem), `LOAD_THRESHOLD` (defaults to # CPU cores), `MEM_THRESHOLD=90`
+(% used). On distress, `--pushover` sends a direct notification in addition
+to the Healthchecks `/fail` (which routes to Pushover via the channel
+integration). Requires `PUSHOVER_USER_KEY` and `PUSHOVER_APP_TOKEN` in the
+env — set in `~/.zshenv.local` alongside the MQTT credentials, same
+pattern (untracked, mode 600; 1Password holds the recoverable source of
+truth).
+
+Current checks (all on Healthchecks.io, all routed to the Pushover
+channel):
+
+| Check | Pinger | Schedule | Grace | What it catches |
+| ----- | ------ | -------- | ----- | --------------- |
+| `bradbury-ha-up` | HA automation (`shell_command.healthchecks_heartbeat`) | every 15 min | 30 min | HA itself is down — the watchdog gap |
+| `wells-up` | `bin/health-check` via wells crontab | every 15 min | 30 min | wells down or distressed (disk/load/mem) |
+| `lem-up` | `bin/health-check` via lem launchd | every 15 min | 30 min | lem down or distressed |
+| `wells-msgvault-nightly` | `bin/msgvault-nightly` on wells, on success/degraded | daily 06:00 | 2 h | Nightly archive pipeline didn't run |
+| `lem-backup-pulled` | rsync launchd on lem, on success | daily 07:00 | 6 h | Offsite backup pull didn't run |
+
+Bradbury's own disk/temp/memory monitoring uses HA's System Monitor
+integration (existing `sensor.system_monitor_*` sensors) with HA
+automations — no shell script, since HA already has the sensors. Those
+automations send via both HA push (primary) and `shell_command.pushover_alert`
+(off-path).
+
+## zsh
 a *login* shell, an *interactive* shell, both, or neither.
 
 | File | Runs for | Holds |
