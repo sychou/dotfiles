@@ -1,11 +1,11 @@
 #!/bin/zsh
 # health-check — verify a machine is healthy, then ping Healthchecks.io.
 #
-# Replaces a bare `curl` heartbeat with a meaningful one: if disk, load, or
-# memory cross threshold, the ping goes to /fail with a detail string, and a
-# direct Pushover notification fires with the specifics. All-clear pings the
-# success endpoint, so the same Healthchecks check covers both "down" and
-# "distressed."
+# Replaces a bare `curl` heartbeat with a meaningful one: if disk space
+# crosses threshold, the ping goes to /fail with a detail string, and a
+# direct Pushover notification fires with the specifics. All-clear pings
+# the success endpoint, so the same Healthchecks check covers both "down"
+# and "distressed."
 #
 # Designed to run from cron/launchd every 15 min alongside (or replacing) the
 # plain heartbeat. zsh so ~/.zshenv puts MQTT/Pushover credentials in scope.
@@ -19,8 +19,6 @@
 #
 # Thresholds (override via env):
 #   DISK_THRESHOLD=90    (% used, per real filesystem)
-#   LOAD_THRESHOLD=auto  (defaults to # CPU cores)
-#   MEM_THRESHOLD=90     (% used)
 #
 # Exits 0 on all-clear, 1 on distress. Either way it pings — the exit code is
 # for the caller, not for silencing the report.
@@ -37,23 +35,12 @@ shift
 [[ "${1:-}" == "--pushover" ]] && SEND_PUSHOVER=1 || SEND_PUSHOVER=0
 
 DISK_THRESHOLD=${DISK_THRESHOLD:-90}
-MEM_THRESHOLD=${MEM_THRESHOLD:-90}
-LOAD_MULTIPLIER=${LOAD_MULTIPLIER:-2}
 
 typeset -a issues
 
 ## --- platform detection ----------------------------------------------
 
 OS=$(uname -s)
-if [[ $OS == "Darwin" ]]; then
-  CPU_CORES=$(sysctl -n hw.ncpu)
-elif [[ $OS == "Linux" ]]; then
-  CPU_CORES=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo)
-else
-  CPU_CORES=4
-fi
-LOAD_THRESHOLD=${LOAD_THRESHOLD:-$((CPU_CORES * LOAD_MULTIPLIER))}
-
 HC_URL="https://hc-ping.com/$CHECK_UUID"
 
 ## --- checks ----------------------------------------------------------
@@ -88,64 +75,9 @@ check_disk() {
   fi
 }
 
-check_load() {
-  local la1
-  if [[ $OS == "Darwin" ]]; then
-    la1=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print $1}')
-  else
-    la1=$(awk '{print $1}' /proc/loadavg 2>/dev/null)
-  fi
-  la1=${la1:-0}
-  # Float comparison via awk: exit 0 (true) if la1 > threshold
-  if awk -v a="$la1" -v b="$LOAD_THRESHOLD" 'BEGIN{exit !(a > b)}'; then
-    echo "load ${la1} exceeds ${LOAD_THRESHOLD} (${CPU_CORES} cores)"
-  fi
-}
-
-check_memory() {
-  local pct
-  if [[ $OS == "Darwin" ]]; then
-    local page_size free active inactive wired speculative compressed used_pages total
-    page_size=$(sysctl -n hw.pagesize 2>/dev/null || echo 4096)
-    local stats
-    stats=$(vm_stat 2>/dev/null)
-    active=$(echo "$stats" | awk '/Pages active/ {gsub(/\./,"",$3); print $3}')
-    inactive=$(echo "$stats" | awk '/Pages inactive/ {gsub(/\./,"",$3); print $3}')
-    speculative=$(echo "$stats" | awk '/Pages speculative/ {gsub(/\./,"",$3); print $3}')
-    wired=$(echo "$stats" | awk '/Pages wired down/ {gsub(/\./,"",$4); print $4}')
-    compressed=$(echo "$stats" | awk '/Pages occupied by compressor/ {gsub(/\./,"",$6); print $6}')
-    free=$(echo "$stats" | awk '/Pages free/ {gsub(/\./,"",$3); print $3}')
-
-    active=${active:-0}; inactive=${inactive:-0}; speculative=${speculative:-0}
-    wired=${wired:-0}; compressed=${compressed:-0}; free=${free:-0}
-
-    used_pages=$((active + wired + compressed + speculative))
-    total=$((used_pages + inactive + free))
-    if (( total > 0 )); then
-      pct=$(( used_pages * 100 / total ))
-    else
-      pct=0
-    fi
-  else
-    local total memavail
-    total=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
-    memavail=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || awk '/MemFree:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
-    if (( total > 0 )); then
-      pct=$(( (total - memavail) * 100 / total ))
-    else
-      pct=0
-    fi
-  fi
-  if (( pct > MEM_THRESHOLD )); then
-    echo "memory at ${pct}%"
-  fi
-}
-
 ## --- run ------------------------------------------------------------
 
 issues+=("${(@f)$(check_disk)}")
-issues+=("${(@f)$(check_load)}")
-issues+=("${(@f)$(check_memory)}")
 
 # Remove empty elements
 issues=("${(@)issues:#}")
