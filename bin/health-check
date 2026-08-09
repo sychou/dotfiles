@@ -77,6 +77,23 @@ check_disk() {
 
 ## --- run ------------------------------------------------------------
 
+# Informational summary (uptime, load, free space) appended to every ping
+# so it shows up in the Healthchecks.io dashboard alongside the status.
+gather_info() {
+  local up_str up_part load free
+  up_str=$(uptime)
+  # "up X days, Y mins" — grab the segment after "up " up to the first comma
+  up_part=${up_str##*up }
+  up_part=${up_part%%,*}
+  # 1/5/15-min load averages (last three decimals on the uptime line)
+  load=$(print -r -- "$up_str" | grep -oE '[0-9]+\.[0-9]+' | tail -3 | paste -sd ' ' -)
+  # Free space on root filesystem
+  free=$(df -hP / 2>/dev/null | awk 'NR==2 {print $4" avail ("$5" used)"}')
+  print -r -- "up ${up_part}; load ${load}; / ${free}"
+}
+
+info=$(gather_info)
+
 issues+=("${(@f)$(check_disk)}")
 
 # Remove empty elements
@@ -85,7 +102,7 @@ issues=("${(@)issues:#}")
 if (( $#issues )); then
   detail="${(j:; :)issues}"
   # Ping /fail
-  curl -fsS -m 10 --retry 3 "${HC_URL}/fail" --data-urlencode "msg=$detail" >/dev/null 2>&1
+  curl -fsS -m 10 --retry 3 "${HC_URL}/fail" --data-urlencode "msg=${detail}; ${info}" >/dev/null 2>&1
   # Direct Pushover (optional, for immediate detail)
   if (( SEND_PUSHOVER )) && [[ -n "${PUSHOVER_USER_KEY:-}" && -n "${PUSHOVER_APP_TOKEN:-}" ]]; then
     curl -fsS -m 10 --retry 3 \
@@ -99,6 +116,6 @@ if (( $#issues )); then
   exit 1
 else
   # All clear — ping success
-  curl -fsS -m 10 --retry 3 "${HC_URL}" >/dev/null 2>&1
+  curl -fsS -m 10 --retry 3 "${HC_URL}" --data-urlencode "msg=${info}" >/dev/null 2>&1
   exit 0
 fi

@@ -140,5 +140,13 @@ detail="+$(( after - before )) msgs, ${elapsed}s, snapshot ${snapshot:-none}"
 print -r -- "result: $result — $detail"
 "$HOME/bin/report-mqtt" msgvault-nightly "$result" "$detail"
 
+# Healthchecks.io ping — success or degraded pings the check; failure sends /fail.
+# The /fail endpoint records the check as "down" and triggers the alert.
+if [[ $result == failed ]]; then
+  curl -fsS -m 10 --retry 3 "https://hc-ping.com/0e27ff9a-7531-4552-8d73-ad4bd14c5cd8/fail" && true
+else
+  curl -fsS -m 10 --retry 3 "https://hc-ping.com/0e27ff9a-7531-4552-8d73-ad4bd14c5cd8" && true
+fi
+
 [[ $result == failed ]] && exit 1
 exit 0
