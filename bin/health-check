@@ -102,7 +102,7 @@ issues=("${(@)issues:#}")
 if (( $#issues )); then
   detail="${(j:; :)issues}"
   # Ping /fail
-  curl -fsS -m 10 --retry 3 "${HC_URL}/fail" --data-urlencode "msg=${detail}; ${info}" >/dev/null 2>&1
+  curl -fsS -m 10 --retry 3 "${HC_URL}/fail" --data "${detail}; ${info}" >/dev/null 2>&1
   # Direct Pushover (optional, for immediate detail)
   if (( SEND_PUSHOVER )) && [[ -n "${PUSHOVER_USER_KEY:-}" && -n "${PUSHOVER_APP_TOKEN:-}" ]]; then
     curl -fsS -m 10 --retry 3 \
@@ -116,6 +116,6 @@ if (( $#issues )); then
   exit 1
 else
   # All clear — ping success
-  curl -fsS -m 10 --retry 3 "${HC_URL}" --data-urlencode "msg=${info}" >/dev/null 2>&1
+  curl -fsS -m 10 --retry 3 "${HC_URL}" --data "${info}" >/dev/null 2>&1
   exit 0
 fi
