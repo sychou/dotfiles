@@ -1,0 +1,68 @@
+vault_root = "~/Vaults/Gumshoe"
+account = "choufam"
+newsletter_window_days = 30
+
+# YouTube channels — channels you have notes on in the Main vault.
+
+[[youtube]]
+name = "All-In Podcast"
+channel_id = "UCESLZhusAkFfsNsApnjF_Cg"
+
+[[youtube]]
+name = "Lennys Podcast"
+channel_id = "UC6t1O76G0jYXOAoYCm153dA"
+
+[[youtube]]
+name = "Thoughtful Money"
+channel_id = "UCjqe6xtZYTfvA4pHs0HgJsQ"
+
+[[youtube]]
+name = "FNO InsureTech"
+channel_id = "UCJMPx9I_Kccp4X-024OqKmw"
+
+# Email newsletters — sender + optional subject match.
+
+[[newsletter]]
+name = "ByteByteGo"
+sender = "bytebytego@substack.com"
+
+[[newsletter]]
+name = "Zalma on Insurance"
+sender = "barryzalma+zalma-on-insurance@substack.com"
+
+[[newsletter]]
+name = "HFS Research"
+sender = "phil.fersht@hfsresearch.com"
+account = "isomer"
+
+[[newsletter]]
+name = "InvestAnswers"
+sender = "investanswers@substack.com"
+
+[[newsletter]]
+name = "What's Hot in Enterprise IT/VC"
+sender = "whatshot@substack.com"
+
+[[newsletter]]
+name = "Equal Ventures"
+sender = "equalventures@substack.com"
+
+[[newsletter]]
+name = "InsTech"
+sender = "hello@instech.co"
+
+[[newsletter]]
+name = "P.S. You Should Know"
+sender = "psyoushouldknow@substack.com"
+
+# Tailscale exit nodes to rotate through when YouTube blocks an IP.
+# Only set this on machines that are not exit nodes themselves.
+# List Mullvad nodes via: tailscale exit-node list
+# wells and lem are your own exit nodes on different ISPs; Mullvad nodes add more IPs.
+tailscale_exit_nodes = [
+    "wells.taila3179.ts.net",
+    "lem.taila3179.ts.net",
+    "us-chi-wg-301.mullvad.ts.net",
+    "us-dal-wg-001.mullvad.ts.net",
+    "us-den-wg-101.mullvad.ts.net",
+]
