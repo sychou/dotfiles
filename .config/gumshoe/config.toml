@@ -55,14 +55,16 @@ sender = "hello@instech.co"
 name = "P.S. You Should Know"
 sender = "psyoushouldknow@substack.com"
 
-# Tailscale exit nodes to rotate through when YouTube blocks an IP.
-# Only set this on machines that are not exit nodes themselves.
-# List Mullvad nodes via: tailscale exit-node list
-# wells and lem are your own exit nodes on different ISPs; Mullvad nodes add more IPs.
-tailscale_exit_nodes = [
-    "wells.taila3179.ts.net",
-    "lem.taila3179.ts.net",
-    "us-chi-wg-301.mullvad.ts.net",
-    "us-dal-wg-001.mullvad.ts.net",
-    "us-den-wg-101.mullvad.ts.net",
-]
+# IP-rotation hooks: gumshoe runs these around YouTube fetching and reads the
+# exit code (blocked: 0 = rotated, retry; nonzero = halt). Rotation is managed
+# by `jaunt`, which auto-discovers exit nodes; the node policy (country filter,
+# cooldown) lives in ~/.config/jaunt/config.toml under [ns.youtube].
+[hooks]
+engage  = "jaunt --ns youtube engage --owner {pid}"
+blocked = "jaunt --ns youtube next --owner {pid}"
+release = "jaunt --ns youtube clear"
+
+# Previous curated list (now superseded by jaunt's [ns.youtube] filter, which
+# selects US Mullvad nodes). To rotate through your own nodes too, add them to
+# jaunt — they aren't picked up by a country filter:
+#   wells.taila3179.ts.net, lem.taila3179.ts.net
