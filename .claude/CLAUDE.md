@@ -64,6 +64,26 @@ Names that changed over time — needed to search any of the three corpora well,
 - Always quote file and directory names in shell commands (paths often contain spaces and bracketed tags like `[CLOSED]`).
 - Don't guess CLI command syntax — check `--help` (or the man page) before writing commands for a tool or subcommand you haven't verified, especially when giving Sean commands to run himself.
 
+## tmux Panes
+
+When running inside tmux (check `$TMUX`), put slow or watchable CLI work in its own pane so Sean can see it progressing, instead of running it inline and reporting only the result. This is his default preference for any tmux session.
+
+Use it for: long `rg`/`fd` sweeps, `msgvault` and `qmd` queries, batch `gog` loops, builds, log tails, anything with a progress display, and anything taking more than a few seconds.
+
+| Action | Command |
+| ------ | ------- |
+| Launch in a new pane | `tmux split-window -h "<cmd>"` (`-v` for a horizontal split; add `-d` to keep Sean's focus where it is) |
+| Drive an existing pane | `tmux send-keys -t <idx> '<cmd>' Enter` |
+| Read output back | `tmux capture-pane -p -t <idx>` |
+| List panes | `tmux list-panes -F '#{pane_index}: #{pane_current_command}'` |
+| Close when done | `tmux kill-pane -t <idx>` |
+
+`capture-pane` is the important half — it lets you monitor a pane without its output flooding the conversation. Prefer it over re-running a command to check state.
+
+Clean up panes you opened, but ask first if the pane still holds something Sean might want to read. Don't touch panes you didn't open.
+
+**Not applicable to subagents.** The `Agent` tool runs subagents in-process and their output can't be redirected to a pane. The headless `claude -p` workaround is blocked by the permission classifier; Sean has set that aside as a separate issue.
+
 ## Working Style
 
 - Be direct, concise, and proactive — prefer directness over verbosity.
