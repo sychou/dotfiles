@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.ollama</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/ollama</string>
+    <string>serve</string>
+  </array>
+  <!-- tiptree: M4, 24 GB, localhost only. qwen3.6:27b-mlx (19 GB) already
+       crowds the ~16 GB GPU budget on this box, so keep the default context
+       ceiling low; per-request num_ctx can still override upward. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>OLLAMA_FLASH_ATTENTION</key><string>1</string>
+    <key>OLLAMA_KV_CACHE_TYPE</key><string>q8_0</string>
+    <key>OLLAMA_CONTEXT_LENGTH</key><string>16384</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/opt/homebrew/var/log/ollama.log</string>
+  <key>StandardErrorPath</key><string>/opt/homebrew/var/log/ollama.log</string>
+</dict>
+</plist>
