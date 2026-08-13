@@ -42,23 +42,7 @@ Sean's files live across two first-class roots — search both (and the relevant
 
 ## tmux Panes
 
-When running inside tmux (check `$TMUX`), put slow or watchable CLI work in its own pane so Sean can see it progressing, instead of running it inline and reporting only the result. This is his default preference for any tmux session.
-
-Use it for: long `rg`/`fd` sweeps, `msgvault` and `qmd` queries, batch `gog` loops, builds, log tails, anything with a progress display, and anything taking more than a few seconds.
-
-| Action | Command |
-| ------ | ------- |
-| Launch in a new pane | `tmux split-window -h "<cmd>"` (`-v` for a horizontal split; add `-d` to keep Sean's focus where it is) |
-| Drive an existing pane | `tmux send-keys -t <idx> '<cmd>' Enter` |
-| Read output back | `tmux capture-pane -p -t <idx>` |
-| List panes | `tmux list-panes -F '#{pane_index}: #{pane_current_command}'` |
-| Close when done | `tmux kill-pane -t <idx>` |
-
-`capture-pane` is the important half — it lets you monitor a pane without its output flooding the conversation. Prefer it over re-running a command to check state.
-
-Clean up panes you opened, but ask first if the pane still holds something Sean might want to read. Don't touch panes you didn't open.
-
-**Not applicable to subagents.** The `Agent` tool runs subagents in-process and their output can't be redirected to a pane. The headless `claude -p` workaround is blocked by the permission classifier; Sean has set that aside as a separate issue.
+If running inside tmux (check `$TMUX`), **load the `tmux` skill before running any slow or watchable CLI command** — it puts the work in its own pane, launched next to this session's pane, so Sean can watch it progress. This is his default preference for any tmux session; the skill carries the pane-targeting rules that make it safe.
 
 ## Working Style
 
