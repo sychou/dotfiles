@@ -3,20 +3,28 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>local.ollama</string>
+  <!-- tiptree: LaunchDaemon (system domain), runs headless as sean — sean has
+       no GUI session on this box, so a LaunchAgent would never load. Install
+       with install-ollama-daemon.sh (sudo); source of truth is this yadm-tracked
+       file, the copy in /Library/LaunchDaemons is the installed artifact.
+       M4, 24 GB; qwen3.6:27b-mlx (19 GB) already crowds the ~16 GB GPU budget,
+       so keep the default context ceiling low; per-request num_ctx can override. -->
+  <key>UserName</key><string>sean</string>
+  <key>GroupName</key><string>staff</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/ollama</string>
     <string>serve</string>
   </array>
-  <!-- tiptree: M4, 24 GB, localhost only. qwen3.6:27b-mlx (19 GB) already
-       crowds the ~16 GB GPU budget on this box, so keep the default context
-       ceiling low; per-request num_ctx can still override upward. -->
   <key>EnvironmentVariables</key>
   <dict>
+    <key>HOME</key><string>/Users/sean</string>
+    <key>OLLAMA_MODELS</key><string>/Users/sean/.ollama/models</string>
     <key>OLLAMA_FLASH_ATTENTION</key><string>1</string>
     <key>OLLAMA_KV_CACHE_TYPE</key><string>q8_0</string>
     <key>OLLAMA_CONTEXT_LENGTH</key><string>16384</string>
   </dict>
+  <key>WorkingDirectory</key><string>/Users/sean</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/opt/homebrew/var/log/ollama.log</string>
