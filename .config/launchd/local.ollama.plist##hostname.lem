@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.ollama</string>
+  <!-- lem: LaunchDaemon (system domain), runs as sean regardless of login
+       state. Serves the network (0.0.0.0). FileVault stays ON (SOC2) — after
+       an unplanned reboot the pre-boot unlock still needs a console visit;
+       use `sudo fdesetup authrestart` for planned reboots to come back
+       unattended. Install with:
+         sudo install -m 644 -o root -g wheel ~/.config/launchd/local.ollama.plist /Library/LaunchDaemons/local.ollama.plist
+         sudo launchctl bootstrap system /Library/LaunchDaemons/local.ollama.plist
+       M4 Pro, 64 GB. Measured: KV cache ~185 KB/token on qwen3.6:35b-mlx,
+       allocated lazily. 64K filled ~= 32 GB total, inside the ~48 GB GPU
+       budget with headroom for a second loaded model. -->
+  <key>UserName</key><string>sean</string>
+  <key>GroupName</key><string>staff</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/ollama</string>
+    <string>serve</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/sean</string>
+    <key>OLLAMA_MODELS</key><string>/Users/sean/.ollama/models</string>
+    <key>OLLAMA_HOST</key><string>0.0.0.0</string>
+    <key>OLLAMA_FLASH_ATTENTION</key><string>1</string>
+    <key>OLLAMA_KV_CACHE_TYPE</key><string>q8_0</string>
+    <key>OLLAMA_CONTEXT_LENGTH</key><string>65536</string>
+  </dict>
+  <key>WorkingDirectory</key><string>/Users/sean</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/opt/homebrew/var/log/ollama.log</string>
+  <key>StandardErrorPath</key><string>/opt/homebrew/var/log/ollama.log</string>
+</dict>
+</plist>
