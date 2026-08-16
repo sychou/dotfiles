@@ -56,9 +56,8 @@ alias systail='tail -f /var/log/system.log'
 alias profileme="history 1 | awk '{print \$2}' | \
     awk 'BEGIN{FS=\"|\"}{print \$1}' | sort | uniq -c | sort -n | \
     tail -n 20 | sort -nr"
-if command_exists brew; then
-    alias brewup='brew update && brew upgrade && brew cleanup && brew doctor'
-fi
+# brewup is now a full system-update script in ~/bin/brewup (brew, ollama
+# service restart, yadm, skills repos, claude, uv, mise)
 
 # --- Debian/Ubuntu binary names ---
 
