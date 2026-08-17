@@ -74,8 +74,13 @@ if command -v brew >/dev/null && brew list --versions ollama >/dev/null 2>&1; th
       note "no local.ollama plist found; restart it however it runs here"
     fi
     if [ "$restarted" = 1 ]; then
-      sleep 3
-      running=$(curl -s --max-time 5 http://localhost:11434/api/version | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+      # A fresh binary can take >10s to come back; poll rather than one-shot.
+      running=""
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        sleep 2
+        running=$(curl -s --max-time 5 http://localhost:11434/api/version | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+        [ "$running" = "$installed" ] && break
+      done
       [ "$running" = "$installed" ] && ok "ollama restarted on $running" || fail "ollama restart (server reports ${running:-nothing})"
     elif [ "$restarted" = 0 ]; then
       fail "ollama restart"
