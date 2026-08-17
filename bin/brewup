@@ -129,6 +129,22 @@ else
   note "mise not installed"
 fi
 
+section "msgvault sync"
+if command -v msgvault >/dev/null; then
+  # Cheap incremental catch-up; the scheduled msgvault-nightly run owns the
+  # full ordered pass (calendar, Granola, backup).
+  msgvault sync && ok "msgvault sync" || fail "msgvault sync"
+else
+  note "msgvault not installed"
+fi
+
+section "qmd search index"
+if command -v qmd >/dev/null; then
+  qmd update && qmd embed && ok "qmd update + embed" || fail "qmd index refresh"
+else
+  note "qmd not installed"
+fi
+
 # --- Housekeeping ---------------------------------------------------------
 section "Homebrew housekeeping"
 if command -v brew >/dev/null; then
