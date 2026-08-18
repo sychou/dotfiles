@@ -127,7 +127,9 @@ fi
 
 section "mise tools"
 if command -v mise >/dev/null; then
-  mise upgrade && ok "mise tools" || fail "mise upgrade"
+  # install first so tools newly declared in the yadm-synced config.toml
+  # materialize on this machine before the upgrade pass
+  mise install && mise upgrade && ok "mise tools" || fail "mise install/upgrade"
 else
   note "mise not installed"
 fi
