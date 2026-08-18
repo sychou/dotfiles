@@ -14,6 +14,10 @@
 
 set -u
 
+# Tool locations that interactive zsh gets from the profile but a bare
+# invocation may not (qmd lives in ~/.bun/bin).
+PATH="$HOME/.bun/bin:$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:$PATH"
+
 FAILURES=()
 NOTES=()
 
@@ -105,7 +109,6 @@ fi
 
 section "Skills repos"
 git_pull "claude-skills" "$HOME/repos/claude-skills"
-git_pull "obsidian-skills" "$HOME/Vaults/Main/.claude/skills"
 
 # --- Tools ----------------------------------------------------------------
 section "Claude Code"
