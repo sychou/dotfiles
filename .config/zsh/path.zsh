@@ -21,6 +21,10 @@
 [ -d "$HOME/.local/bin" ]          && PATH="$HOME/.local/bin:$PATH"
 [ -d "$HOME/bin" ]                 && PATH="$HOME/bin:$PATH"
 [ -d "$HOME/.cargo/bin" ]          && PATH="$HOME/.cargo/bin:$PATH"
+
+# bun's global-install bin (qmd lives here) — distinct from the bun runtime,
+# which resolves through the mise shims above.
+[ -d "$HOME/.bun/bin" ]            && PATH="$HOME/.bun/bin:$PATH"
 [ -d "$HOME/.fzf/bin" ]            && PATH="$HOME/.fzf/bin:$PATH"
 [ -d "/opt/homebrew/opt/fzf/bin" ] && PATH="/opt/homebrew/opt/fzf/bin:$PATH"
 [ -d "/opt/homebrew/sbin" ]        && PATH="/opt/homebrew/sbin:$PATH"
