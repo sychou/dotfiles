@@ -826,12 +826,23 @@ common_mise() {
 }
 
 common_npm() {
-    if command_exists npm; then
-        log "Installing qmd (local markdown search) + Claude skill"
-        npm install -g @tobilu/qmd
+    # qmd itself is declared in ~/.config/mise/config.toml and installed by
+    # common_mise; only its Claude skill is installed here.
+    #
+    # It used to be `npm install -g @tobilu/qmd`, which writes into the
+    # mise-managed node's own lib/node_modules — so every node upgrade moved to
+    # a fresh install dir and silently took qmd with it. lem and tiptree both
+    # lost their copy that way; wells kept a stale one because its mise config
+    # predated the declaration. The mise-declared tool survives node upgrades
+    # and is the copy `brewup` already upgrades.
+    #
+    # Guarded on qmd, not npm: npm being present says nothing about whether
+    # mise actually installed the tool this step needs.
+    if command_exists qmd; then
+        log "Installing the qmd Claude skill"
         qmd skill install --global --yes -f
     else
-        warn "npm is missing (mise node setup failed?)"
+        warn "qmd is missing (mise tool install failed?)"
     fi
 }
 
