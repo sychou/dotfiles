@@ -269,6 +269,51 @@ macos_tailscale_cli() {
     chmod +x "$HOME/.local/bin/tailscale"
 }
 
+macos_1password_agent() {
+    # ~/.ssh/config points IdentityAgent at ~/.1password/agent.sock, the one
+    # path that reads the same on macOS and Linux. On macOS nothing listens
+    # there: the agent lives inside the app's group container, so the shared
+    # path only exists if something links it. A fresh Mac has no link, and the
+    # failure is silent and misleading — ssh reports the socket missing, falls
+    # back to ~/.ssh/id_* keys that were never generated, and every host the
+    # 1Password keys unlock answers "Permission denied (publickey)".
+    #
+    # Linked unconditionally rather than only when the socket already exists:
+    # the agent is off until it is enabled by hand below, and a dangling
+    # symlink resolves the moment it comes up.
+    [ -d "/Applications/1Password.app" ] || return 0
+    log "Linking the 1Password SSH agent socket"
+    mkdir -p "$HOME/.1password"
+    ln -sfn "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" \
+        "$HOME/.1password/agent.sock"
+
+    # The github.com block in ~/.ssh/config selects its key by public-key file
+    # under IdentitiesOnly, so ~/.ssh/github.pub has to exist even though the
+    # private half never leaves 1Password. It is derived, not secret, so it is
+    # written here rather than tracked. Only the agent can answer for it, and
+    # the agent is off until the manual step below — so a first run on a fresh
+    # Mac writes nothing, and the re-run afterwards fills it in.
+    #
+    # Staged through a temp file: a failed or empty read must leave a working
+    # github.pub alone rather than truncating it.
+    local pub="$HOME/.ssh/github.pub"
+    mkdir -p "$HOME/.ssh"
+    if SSH_AUTH_SOCK="$HOME/.1password/agent.sock" ssh-add -L 2>/dev/null \
+        | grep -w 'github$' > "$pub.tmp" && [ -s "$pub.tmp" ]; then
+        mv "$pub.tmp" "$pub"
+        chmod 644 "$pub"
+        log "Wrote ~/.ssh/github.pub from the 1Password agent"
+    else
+        rm -f "$pub.tmp"
+        manual "Sign in to 1Password, then turn the SSH agent on:
+      Settings -> Developer -> 'Use the SSH agent'. Until you do, the socket
+      this bootstrap linked stays dangling, ~/.ssh/github.pub cannot be
+      derived, and ssh to GitHub and to every machine that trusts your
+      1Password keys fails with 'Permission denied (publickey)'.
+      Re-run 'yadm bootstrap' afterwards to write github.pub."
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Ubuntu
 # ---------------------------------------------------------------------------
@@ -1112,6 +1157,7 @@ case "$OS" in
         # it, and only appears to work on re-runs.
         [ -n "$gui" ] && { macos_fonts; macos_casks; }
         macos_tailscale_cli
+        macos_1password_agent
         ;;
     Linux)
         command_exists apt-get || die "only Debian/Ubuntu is supported on Linux"
