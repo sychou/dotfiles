@@ -1211,6 +1211,11 @@ case "$HOST" in
         # exists so the primary machine is not reported as unrecognised.
         log "verne: daily driver — no machine-specific setup needed"
         ;;
+    huxley)
+        # Same shape as verne: everything it needs is in the common path, and
+        # the arm exists so the machine is not reported as unrecognised.
+        log "huxley: no machine-specific setup needed"
+        ;;
     lem)
         # common_ollama starts the service everywhere. What is lem-specific is
         # serving it to the tailnet, which needs an agent brew cannot provide.
@@ -1255,7 +1260,7 @@ case "$HOST" in
         # resolved wrong, and every per-machine step was skipped. That is the
         # silent failure worth being loud about — a genuinely new box costs one
         # line of noise, which is the right trade.
-        warn "No machine-specific setup for '$HOST' (known: verne, lem, tiptree, wells)"
+        warn "No machine-specific setup for '$HOST' (known: verne, huxley, lem, tiptree, wells)"
         log "  OS detected as $OS — core toolchain installed via the $OS path"
         [ "$OS" = Darwin ] && log "  macOS: full base cask list installed (no exclusions)"
         [ "$OS" = Linux ]  && log "  Linux: GUI apps skipped unless 'yadm config local.gui true'"
