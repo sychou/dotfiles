@@ -2,44 +2,10 @@
 
 These dotfiles are managed by [yadm](https://yadm.io/).
 
-## Repository access
-
-The repo went private on 2026-08-05, so every machine has to prove who it is to
-pull. There is no single method, because the machines differ in what they can
-do unattended:
-
-| Host | Method | Why |
-| ---- | ------ | --- |
-| `lem` | HTTPS + `gh` credential helper | 1Password requires interactive approval to *sign*, so SSH cannot run unattended here |
-| `verne` | SSH + 1Password agent | its agent signs without prompting |
-| `wells` | SSH + read-only deploy key | headless, no 1Password, and `gh` tokens expire silently |
-| `tiptree` | SSH + read-only deploy key | not Sean's GitHub account |
-
-Deploy keys are the right tool for the last two: scoped to this one repo,
-read-only so the machine can never push, revocable without touching anyone's
-account, and tied to the machine rather than to a person.
-
-**The failure mode is silence.** `yadm fetch -q` swallows an auth error, so a
-machine that cannot authenticate reports "0 commits behind" while drifting.
-`common_repo_access` in the bootstrap tests this up front and prints the remedy.
-
-Per-machine key selection lives in `~/.ssh/config.local`, which the tracked
-`~/.ssh/config` includes **first** — ssh takes the first value it finds for each
-keyword, so a local override wins over the shared `github.com` block. That block
-points at a 1Password-held key that exists only on Sean's own machines.
-
-## Machines
+## What varies between machines
 
 Every machine gets the **same tracked configs and the same core CLI toolchain**.
 Only two things vary.
-
-| Host | OS | Role | GUI apps |
-| ---- | -- | ---- | -------- |
-| `verne` | macOS | daily driver + dev | all 29 |
-| `lem` | macOS | daily driver + dev; ollama served to the tailnet, exit node | 28 (no `trezor-suite`) |
-| `tiptree` | macOS | Sheldon's box; OpenClaw (by hand), obsidian-headless syncing the workspace as the "Sheldon" vault | 10 |
-| `wells` | Ubuntu | msgvault server + Gmail sync, nightly archive pipeline, exit node | opt-in |
-
 
 **1. GUI apps.** Always installed on macOS. On Linux it is a per-machine choice:
 
@@ -47,84 +13,19 @@ Only two things vary.
 yadm config local.gui true
 ```
 
-**2. Hostname.** Each machine's one-off role is keyed on `hostname -s` rather
-than on a class, because no two of these are alike enough to share a category.
-`lem` serves ollama to the tailnet from its own LaunchAgent — Homebrew's
-service cannot, since a plist that declares `EnvironmentVariables` receives
-exactly that dict and `launchctl setenv OLLAMA_HOST` never reaches the process.
-`wells` runs the msgvault server and embeds against `lem`; `tiptree` gets
-OpenClaw by hand.
+**2. Hostname.** Per-machine one-offs are keyed on `hostname -s`, because these
+machines are not alike enough to share a category — one serves models to the
+network, one is headless, one belongs to someone else. A host with no arm of its
+own still gets everything above; only its extras are skipped.
 
-**OS detection is independent of hostname.** An unrecognised machine still
-takes the correct macOS or Ubuntu path and gets the full core toolchain — only
-the per-machine extras are skipped, and the bootstrap says so rather than
-finishing silently. On macOS it also installs the full base cask list, since
-exclusions are opt-in per host.
+**OS detection is independent of hostname.** An unrecognised machine still takes
+the correct macOS or Ubuntu path and gets the full core toolchain, and the
+bootstrap says so rather than finishing silently. On macOS it also installs the
+full base cask list, since exclusions are opt-in per host.
 
 > **The bootstrap never uninstalls.** The per-machine cask lists control what
 > gets *installed*, not what gets removed. A machine that already has extra apps
 > keeps them until you `brew uninstall --cask` them yourself.
-
-## Nightly archive pipeline (`wells`)
-
-`bin/msgvault-nightly` runs one ordered pass and reports once:
-
-```text
-02:00 / 03:00 / 04:00   mail sync per account   (msgvault daemon, config.toml)
-06:00                   msgvault-nightly        (cron)
-                          sync -> calendar -> Granola -> backup snapshot
-07:00                   repo pull to lem        (launchd on lem)
-```
-
-It replaced three separate cron entries sequenced only by guessed times — each
-scheduled late enough that the previous had *probably* finished. That held until
-a long sync during the Gmail backfill would have run straight through the next
-job's window.
-
-The mail syncs stay in `config.toml` deliberately: email still syncs if the
-script never runs, and the script's `sync` step is then a cheap incremental
-catch-up before the snapshot is taken.
-
-A failed **sync** does not abort the run — a stale-but-complete archive is still
-worth snapshotting — but the result reports as `degraded` and names the failed
-step, so a bad night is never indistinguishable from a good one. A failed
-**backup** is fatal.
-
-Results publish over MQTT via `bin/report-mqtt` as retained JSON on
-`homelab/<host>/<job>/status`, so the last known state of every job is one
-subscribe away rather than five logs across two machines and two timezones.
-Reporting is fire-and-forget: an unreachable broker warns and still exits 0,
-because it must never fail the backup it reports on.
-
-Backups live on wells' **internal** NVMe while the archive sits on the external
-USB disk, so a failure of either device does not take both. lem holds the
-offsite copy in the other house.
-
-## Job reporting (MQTT)
-
-Scheduled jobs publish their outcome to the Mosquitto broker on `bradbury`; Home
-Assistant decides what deserves an alert. Scripts say *what happened*, and
-notification policy lives in one place instead of being hardcoded into each job.
-
-- **`bin/report-mqtt <job> <result> [detail]`** publishes retained JSON to
-  `homelab/<host>/<job>/status`. Retained matters — the last known state of every
-  job is one subscribe away rather than several logs on several machines.
-- **Fire-and-forget**: an unreachable broker warns on stderr and still exits 0.
-  Reporting must never fail the job it reports on.
-- **zsh, not sh, deliberately** — zsh sources `~/.zshenv` for non-interactive
-  shells, which is what puts `MQTT_USER`/`MQTT_PASS` in scope under cron and
-  launchd. A `#!/bin/sh` version would need credentials passed in.
-- **Credentials are per-machine**, username = hostname, in `~/.zshenv.local`
-  (untracked, mode 600). 1Password holds `mqtt-<host>` items as the recoverable
-  source of truth, but it is not the runtime source: these jobs run when nobody
-  is present to unlock a session.
-- **`MQTT_HOST`** overrides the broker address. The Purnell machines find it on
-  the LAN; `wells` pins the tailnet address, because probing an unreachable LAN
-  first cost it a full TCP timeout on every publish.
-
-The alert worth having is **absence**, not failure: `msgvault nightly went
-silent` fires when nothing has reported in 26 hours. A failure alert can only
-fire when something publishes a failure, so it cannot see a job that never ran.
 
 ## Setting Up a New Mac
 
@@ -173,7 +74,7 @@ It picks the cask list from `hostname -s`, so **set the hostname before running
 it** — otherwise the machine gets the full base list:
 
 ```sh
-sudo scutil --set LocalHostName tiptree
+sudo scutil --set LocalHostName <hostname>
 ```
 
 ### GitHub & Commit Signing
@@ -250,88 +151,30 @@ new shell fails loudly, by design.
 
 ## Tracked Files
 
-```
-.claude/CLAUDE.md
-.config/gh/config.yml
-.config/ghostty/config
-.config/git/ignore
-.config/lf/lfrc
-.config/lf/previewer.sh
-.config/mise/config.toml
-.config/nvim/.luarc.json
-.config/nvim/init.lua
-.config/nvim/lua/plugins/which-key.lua
-.config/yadm/bootstrap
-.config/zed/keymap.json
-.config/zed/settings.json
-.config/zsh/path.zsh
-.gitconfig
-.inputrc
-.nethackrc
-.sqliterc
-.ssh/config
-.tmux.conf
-.vim/colors/nord.vim
-.vimrc
-.visidatarc
-.zprofile
-.zshenv
-.zshrc
-README.md
-bin/fzf-preview.sh
-bin/health-check
-bin/msgvault-nightly
-bin/report-mqtt
-```
-
-## Infrastructure monitoring (Healthchecks.io + Pushover)
-
-Independent of the MQTT reporting layer above, a hosted **Healthchecks.io**
-dead-man's-switch watches the always-on machines and the nightly jobs. If a
-check doesn't hear from its pinger within the grace period, Healthchecks
-fires the **Pushover** channel (emergency priority — retry-until-ack,
-bypasses DND/Focus), which is deliberately off-path: it reaches the phone
-over cellular, so it survives HA being down and home internet being down.
-
-**`bin/health-check`** (in the dotfiles repo, so every machine has it) is
-a portable zsh script that checks disk, load, and memory against
-configurable thresholds before pinging. All-clear pings the success
-endpoint; any threshold exceeded pings `/fail` with the detail string and
-sends a direct Pushover with the specifics (e.g. "wells: disk / at 94%").
-This means a Healthchecks check covers both "down" and "distressed" — not
-just "is the machine on."
+The authoritative list is whatever yadm has, so read it from yadm rather than
+from here:
 
 ```sh
-health-check <check-uuid> [--pushover]
+yadm list -a
 ```
 
-Thresholds (override via env): `DISK_THRESHOLD=90` (% used, per real
-filesystem), `LOAD_THRESHOLD` (defaults to # CPU cores), `MEM_THRESHOLD=90`
-(% used). On distress, `--pushover` sends a direct notification in addition
-to the Healthchecks `/fail` (which routes to Pushover via the channel
-integration). Requires `PUSHOVER_USER_KEY` and `PUSHOVER_APP_TOKEN` in the
-env — set in `~/.zshenv.local` alongside the MQTT credentials, same
-pattern (untracked, mode 600; 1Password holds the recoverable source of
-truth).
+Roughly: shell startup (`.zshenv`, `.zprofile`, `.zshrc`, `.config/zsh/path.zsh`),
+git and ssh config, editor config (vim, neovim, zed), terminal and TUI config
+(ghostty, tmux, lf, visidata, sqlite, readline), the Claude instructions file,
+this README, the bootstrap, and the helper scripts in `bin/`.
 
-Current checks (all on Healthchecks.io, all routed to the Pushover
-channel):
+Some entries carry a `##` suffix — `path##os.Darwin`, `plist##hostname.<host>`.
+That is yadm's alternate-file mechanism: it checks out the variant matching the
+current OS or hostname and ignores the rest, which is how one repo holds
+per-platform and per-machine versions of the same file.
 
-| Check | Pinger | Schedule | Grace | What it catches |
-| ----- | ------ | -------- | ----- | --------------- |
-| `bradbury-ha-up` | HA automation (`shell_command.healthchecks_heartbeat`) | every 15 min | 30 min | HA itself is down — the watchdog gap |
-| `wells-up` | `bin/health-check` via wells crontab | every 15 min | 30 min | wells down or distressed (disk/load/mem) |
-| `lem-up` | `bin/health-check` via lem launchd | every 15 min | 30 min | lem down or distressed |
-| `wells-msgvault-nightly` | `bin/msgvault-nightly` on wells, on success/degraded | daily 06:00 | 2 h | Nightly archive pipeline didn't run |
-| `lem-backup-pulled` | rsync launchd on lem, on success | daily 07:00 | 6 h | Offsite backup pull didn't run |
-
-Bradbury's own disk/temp/memory monitoring uses HA's System Monitor
-integration (existing `sensor.system_monitor_*` sensors) with HA
-automations — no shell script, since HA already has the sensors. Those
-automations send via both HA push (primary) and `shell_command.pushover_alert`
-(off-path).
+**Not tracked, by design:** `~/.zshenv.local` (secrets) and `~/.ssh/config.local`
+(per-machine key selection). Both are machine-specific and stay out of the repo;
+see [Secrets](#secrets).
 
 ## zsh
+
+Four files, and which one runs depends on whether the shell is
 a *login* shell, an *interactive* shell, both, or neither.
 
 | File | Runs for | Holds |
@@ -439,7 +282,12 @@ Currently required:
 export OPENAI_API_KEY="..."
 export OLLAMA_API_KEY="..."
 export GOG_KEYRING_PASSWORD="..."
+export MQTT_USER="..."
+export MQTT_PASS="..."
 ```
+
+That list mirrors `ZSHENV_REQUIRED` in `~/.zshenv`, which is what actually
+enforces it — read it there if the two ever disagree.
 
 To add another, append it to the `ZSHENV_REQUIRED` array in `~/.zshenv` so a
 machine missing it fails fast instead of silently misbehaving.
@@ -504,7 +352,7 @@ Not installed on Ubuntu: `lazygit` and `flyctl` (Mac-only by choice), plus
 One base list of 29, with small per-machine exclusions. Adding an app means
 editing one array in the bootstrap; a machine opts out by name.
 
-**Base list** — what `verne` gets:
+**Base list** — what a full macOS install gets:
 
 1Password, 1Password CLI, Bambu Studio, Boop, ChatGPT, Claude, CleanShot,
 Discord, Docker Desktop, Ghostty, Google Chrome, Granola, HandBrake,
@@ -512,26 +360,12 @@ Logi Options+, Microsoft Teams, MonitorControl, Obsidian, Signal, Slack,
 Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex,
 WhatsApp, Wispr Flow, Zoom
 
-**`lem`** — base minus `trezor-suite` (28).
+Machines that need a narrower set — a shared box, a headless one — list their
+exclusions in the bootstrap's cask arrays, and opt out by name.
 
-**`tiptree`** — 11. Sheldon's box, so OpenClaw is the assistant there and the
-other AI desktop apps go, along with personal comms, media and hardware
-utilities:
-
-> 1Password · 1Password CLI · CleanShot · Docker Desktop · Ghostty ·
-> Google Chrome · MonitorControl · Obsidian · Slack · Tailscale ·
-> Visual Studio Code
-
-Excluded on `tiptree`: Bambu Studio, Boop, ChatGPT, Claude, Discord, Granola,
-HandBrake, Logi Options+, Microsoft Teams, Obsidian, Signal, Spotify, Telegram,
-Trezor Suite, VLC, Webex, WhatsApp, Wispr Flow, Zoom.
-
-Obsidian is excluded in favour of `obsidian-headless`: nobody sits at that
-machine, it only needs to push the OpenClaw workspace to Sync.
-
-**`wells`** — no casks; Ubuntu. If given a desktop (`yadm config local.gui
-true`) it gets `ubuntu-desktop-minimal` and `vlc` from apt, and the rest —
-1Password, Chrome, Obsidian, VS Code, Ghostty — install from vendor `.deb`s.
+On Ubuntu there are no casks. With `yadm config local.gui true` the box gets
+`ubuntu-desktop-minimal` and `vlc` from apt; the rest — 1Password, Chrome,
+Obsidian, VS Code, Ghostty — install from vendor `.deb`s.
 
 ### Mac App Store Only
 
@@ -548,16 +382,16 @@ Set globally by the bootstrap: python 3.12, node, bun, go, pnpm.
 - tldr, better man pages
 - csvkit, CSV toolkit (in2csv, csvlook, csvgrep, etc.)
 
-### Global npm Tools (via mise node)
+### Node Tools (via mise)
 
-Not on Homebrew, so installed as global npm packages after mise sets up node:
+Not on Homebrew. Declared in `~/.config/mise/config.toml` and installed by
+mise's npm backend, so they survive node upgrades and are refreshed by `brewup`:
 
 - qmd, local markdown search engine (see [qmd](#qmd--local-note-search))
 
 > **Granola meetings are not here any more.** muesli was retired on 2026-08-06.
-> Meetings now sync into msgvault on `wells` via Granola's official API
-> (nightly, 05:15) and are searched with `msgvault`, not `qmd`. The `granola`
-> collection no longer exists.
+> Meetings now sync into msgvault via Granola's official API and are searched
+> with `msgvault`, not `qmd`. The `granola` collection no longer exists.
 
 ### Built from Source
 
