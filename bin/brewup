@@ -15,8 +15,11 @@
 set -u
 
 # Tool locations that interactive zsh gets from the profile but a bare
-# invocation may not (qmd lives in ~/.bun/bin).
-PATH="$HOME/.bun/bin:$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:$PATH"
+# invocation may not. qmd is a mise-declared tool reached through its shim —
+# it was under ~/.bun/bin long enough ago that no machine has that directory
+# any more, so the old entry silently did nothing and the qmd section below
+# depended on the caller's PATH already being right.
+PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:$PATH"
 
 FAILURES=()
 NOTES=()
