@@ -40,10 +40,6 @@ Sean's files live across two first-class roots — search both (and the relevant
 - Always quote file and directory names in shell commands (paths often contain spaces and bracketed tags like `[CLOSED]`).
 - Don't guess CLI command syntax — check `--help` (or the man page) before writing commands for a tool or subcommand you haven't verified, especially when giving Sean commands to run himself.
 
-## tmux Panes
-
-If running inside tmux (check `$TMUX`), **load the `tmux` skill before running any slow or watchable CLI command** — it puts the work in its own pane, launched next to this session's pane, so Sean can watch it progress. This is his default preference for any tmux session; the skill carries the pane-targeting rules that make it safe.
-
 ## Working Style
 
 - Be direct, concise, and proactive — prefer directness over verbosity.
