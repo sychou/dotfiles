@@ -825,7 +825,7 @@ common_mise() {
     mise reshim
 }
 
-common_npm() {
+common_qmd_skill() {
     # qmd itself is declared in ~/.config/mise/config.toml and installed by
     # common_mise; only its Claude skill is installed here.
     #
@@ -1195,7 +1195,7 @@ esac
 common_repo_access
 common_zsh
 common_mise
-common_npm
+common_qmd_skill
 common_uv
 common_claude_code
 common_msgvault
