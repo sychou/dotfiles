@@ -508,13 +508,14 @@ Two accounts, each on its own OAuth client:
 
 | Alias | Account | Client | Client ID prefix | Cloud project |
 | --- | --- | --- | --- | --- |
-| `choufam` | sean@choufam.com | `default` | `892374733848` | unrecorded — see below |
+| `choufam` | sean@choufam.com | `default` | `892374733848` | `gog-sean` |
 | `isomer` | sean@isomer.ai | `isomer` | `578878259075` | `gog-sean-487522` |
 
 Register the clients from their downloaded JSON, then authorize each account:
 
 ```sh
-gog auth credentials set <choufam-client.json> --client default
+gog auth credentials set ~/Desktop/LIBRARY/"Google OAuth"/Choufam/client_secret_892374733848-*.json \
+    --client default
 gog auth credentials set ~/Desktop/ISOMER/LIBRARY/"Google OAuth"/Isomer/client_secret_578878259075-*.json \
     --client isomer --domain isomer.ai
 gog auth add sean@choufam.com --services all
@@ -537,11 +538,16 @@ can see the Isomer, Choufam and Family calendars at once:
 gog -a isomer calendar events --calendars "Sean (Isomer),Sean (Choufam),Family" --today --plain
 ```
 
-**The Choufam client JSON is not filed anywhere.** The Isomer, Sheldon and Agent
-Workplace client secrets are in `~/Desktop/ISOMER/LIBRARY/Google OAuth/`, but the
-one the personal account depends on exists only as a keyring entry on machines
-already set up. Re-download it from its Cloud project and file it with the others
-before that becomes a problem.
+**The client secrets live under two different roots — check both.** They follow
+the usual entity/functional split, so the account decides the root:
+
+| Client | Filed at |
+| --- | --- |
+| Choufam, Gmail | `~/Desktop/LIBRARY/Google OAuth/` |
+| Isomer, Sheldon, Agent Workplace | `~/Desktop/ISOMER/LIBRARY/Google OAuth/` |
+
+Looking only in the ISOMER one and concluding the personal client was never
+filed is an easy mistake — it is there, under its own root.
 
 ## Ghostty
 
