@@ -885,6 +885,11 @@ common_msgvault() {
 # on wells), so they are never pulled here — see the summary note.
 OLLAMA_CLOUD_MODELS="mistral-large-3:675b-cloud gemma4:31b-cloud glm-5.2:cloud"
 
+# Our own launchd job, whichever domain a given host runs it in. Defined here
+# rather than beside the daemon helper because common_ollama guards on it and
+# runs on every machine, including the ones that have no daemon.
+OLLAMA_LABEL="local.ollama"
+
 common_ollama() {
     command_exists ollama || { warn "ollama is missing"; return 1; }
 
@@ -893,11 +898,20 @@ common_ollama() {
     # it survives reboot instead of running as an orphaned process. Guarded,
     # because `brew services start` errors on an already-running service.
     if [ "$OS" = Darwin ]; then
-        # Where a local agent already owns ollama (lem, so the tailnet can reach
-        # it), leave brew's service alone — both want :11434 and only one can
-        # have it. Checked by what is loaded rather than by hostname, so this
-        # stays correct if another machine takes the role.
-        if launchctl print "gui/$(id -u)/${OLLAMA_LABEL}" >/dev/null 2>&1; then
+        # Where our own local.ollama already owns ollama, leave brew's service
+        # alone — both want :11434 and only one can have it. Checked by what is
+        # installed rather than by hostname, so this stays correct as the role
+        # moves between machines.
+        #
+        # BOTH domains, because the plist is not always the same shape: verne
+        # runs it as a gui-domain LaunchAgent, lem and tiptree as a system-domain
+        # LaunchDaemon. A gui-only check misses the daemon hosts entirely and
+        # starts a second ollama that loses the race for :11434 and then
+        # crash-loops under KeepAlive. The plist test comes first because it
+        # needs no privileges: `launchctl print system/...` is not reliably
+        # readable as a non-root user.
+        if [ -f "/Library/LaunchDaemons/${OLLAMA_LABEL}.plist" ] \
+           || launchctl print "gui/$(id -u)/${OLLAMA_LABEL}" >/dev/null 2>&1; then
             log "ollama is managed by $OLLAMA_LABEL; leaving brew services alone"
         elif ! brew services info ollama --json 2>/dev/null | jq -e '.[0].running' >/dev/null 2>&1; then
             log "Starting ollama via brew services"
@@ -999,68 +1013,74 @@ lem_msgvault_repo_pull() {
     log "  pulling wells' backup repo nightly at 07:00"
 }
 
-# --- lem: ollama as the tailnet's inference host ----------------------------
+# --- ollama as a system daemon (lem, tiptree) -------------------------------
 #
-# lem holds the local models nothing else here can run — an M4 Pro with ~52 GiB
-# of unified memory against wells' CPU-only box. wells embeds its msgvault
-# archive against this endpoint: measured ~1s per batch over the tailnet versus
-# ~11s on wells' own CPU, which over a 20G archive is the difference between
-# hours and days.
+# lem holds the local models nothing else here can run — an M4 Pro against
+# wells' CPU-only box. wells embeds its msgvault archive against this endpoint:
+# measured ~1s per batch over the tailnet versus ~11s on wells' own CPU, which
+# over a 20G archive is the difference between hours and days. tiptree runs the
+# same daemon for OpenClaw — smaller, and localhost-only.
 #
-# Homebrew's service cannot do this. Its plist declares EnvironmentVariables
-# straight from the formula, and a plist that declares that dict receives
-# exactly it — `launchctl setenv OLLAMA_HOST` does not merge in, which is why
-# setting it that way appears to work and changes nothing. Editing brew's copy
-# does work, until the next `brew services` run regenerates the plist from the
-# formula and silently reverts it. Hence an agent of our own.
-OLLAMA_LABEL="local.ollama"
-OLLAMA_BIN="/opt/homebrew/bin/ollama"
-# 0.0.0.0 rather than the tailnet IP — deliberately, for now. See the security
-# note this queues.
-OLLAMA_LISTEN="0.0.0.0"
+# Homebrew's service cannot do either job. Its plist declares
+# EnvironmentVariables straight from the formula, and a plist that declares that
+# dict receives exactly it — `launchctl setenv OLLAMA_HOST` does not merge in,
+# which is why setting it that way appears to work and changes nothing. Editing
+# brew's copy does work, until the next `brew services` run regenerates the
+# plist from the formula and silently reverts it.
+#
+# The plist is NOT generated here. It is tracked per host as a yadm alt at
+# ~/.config/launchd/local.ollama.plist##hostname.<host>, so the tuning that
+# belongs to a machine — its context ceiling against its GPU budget, whether it
+# binds the wildcard — sits next to that machine's measured numbers instead of
+# in a heredoc. bin/install-ollama-daemon.sh copies the file into
+# /Library/LaunchDaemons and bootstraps it in the system domain: a daemon, not
+# an agent, because both boxes must serve with nobody logged in.
+#
+# This replaced a version that generated a competing LaunchAgent under the same
+# label. Labels are unique per domain, so it did not collide — it loaded
+# alongside the daemon, lost the race for :11434, and crash-looped under
+# KeepAlive while the daemon carried on serving.
+OLLAMA_DAEMON_PLIST="$HOME/.config/launchd/${OLLAMA_LABEL}.plist"
+OLLAMA_DAEMON_INSTALLER="$HOME/bin/install-ollama-daemon.sh"
 
-lem_ollama_agent() {
-    [ -x "$OLLAMA_BIN" ] || { warn "$OLLAMA_BIN not found; is ollama installed?"; return 1; }
+ollama_daemon() {
+    [ -f "$OLLAMA_DAEMON_PLIST" ] || {
+        warn "no tracked ${OLLAMA_LABEL}.plist for '$HOST' — yadm materialises it
+      from a ##hostname.$HOST alt; check ~/.config/launchd/"
+        return 1
+    }
+    [ -x "$OLLAMA_DAEMON_INSTALLER" ] \
+        || { warn "$OLLAMA_DAEMON_INSTALLER is missing or not executable"; return 1; }
 
-    # Both services want :11434. `brew services stop` also removes brew's
-    # LaunchAgent, so afterwards there is exactly one thing claiming the port
-    # and no race at boot.
-    if brew services info ollama --json 2>/dev/null | jq -e '.[0].loaded' >/dev/null 2>&1; then
-        log "Stopping the Homebrew ollama service in favour of $OLLAMA_LABEL"
-        brew services stop ollama >/dev/null 2>&1 \
-            || warn "could not stop the Homebrew ollama service"
+    # The installer needs sudo for the system domain, and the rest of the macOS
+    # path deliberately never prompts — a bootstrap that blocks on a password is
+    # one that cannot run unattended on a fresh box. So: run it when a sudo
+    # timestamp is already open, queue it as a manual step when it is not.
+    if sudo -n true 2>/dev/null; then
+        "$OLLAMA_DAEMON_INSTALLER" \
+            || { warn "could not install the $OLLAMA_LABEL daemon"; return 1; }
+        log "  ollama serving from the $OLLAMA_LABEL LaunchDaemon"
+    else
+        manual "Install the ollama LaunchDaemon on $HOST (needs sudo):
+      $OLLAMA_DAEMON_INSTALLER"
     fi
 
-    # FLASH_ATTENTION and KV_CACHE_TYPE are carried over deliberately: they come
-    # from Homebrew's formula, not from any of our config, so an agent that sets
-    # only OLLAMA_HOST silently drops two tuning settings that were in effect
-    # while brew owned the service.
-    # KeepAlive because this is a resident daemon, not a periodic job. It also
-    # covers a bind that fails at boot: if OLLAMA_LISTEN is ever narrowed to the
-    # tailnet IP, launchd retries until tailscaled has brought the interface up.
-    _launch_agent "$OLLAMA_LABEL" \
-        "    <key>KeepAlive</key>         <true/>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>OLLAMA_HOST</key>            <string>${OLLAMA_LISTEN}</string>
-        <key>OLLAMA_FLASH_ATTENTION</key> <string>1</string>
-        <key>OLLAMA_KV_CACHE_TYPE</key>   <string>q8_0</string>
-    </dict>" \
-        "$OLLAMA_BIN" serve || return 1
+    # Only warn on the hosts that actually bind the wildcard — tiptree's plist
+    # sets no OLLAMA_HOST and stays on localhost, where none of this applies.
+    grep -q '<key>OLLAMA_HOST</key><string>0\.0\.0\.0</string>' "$OLLAMA_DAEMON_PLIST" || return 0
 
-    log "  ollama listening on ${OLLAMA_LISTEN}:11434 for the tailnet"
-    manual "SECURITY, when convenient: ollama on lem listens on ${OLLAMA_LISTEN} with NO
+    manual "SECURITY, when convenient: ollama on $HOST listens on 0.0.0.0 with NO
       authentication of any kind. Anything that can reach :11434 — every device
       on the LAN, including guest wifi and IoT — can list, run, pull and delete
       models. Two changes, and BOTH are needed because either alone achieves
       nothing:
-        1. Bind the tailnet IP instead of the wildcard, by setting
-           OLLAMA_LISTEN=\"\$(tailscale ip -4):11434\" in this file. On the
-           wildcard, LAN traffic reaches ollama without passing through
-           Tailscale at all, so no ACL can see it.
-        2. Add a Tailscale ACL restricting dst lem:11434 to the nodes that need
-           it, AND narrow the catch-all src/dst rule most tailnets ship with —
-           ACLs are additive allow-lists, so a new narrow rule restricts
+        1. Bind the tailnet IP instead of the wildcard, by setting OLLAMA_HOST
+           to \"\$(tailscale ip -4)\" in $OLLAMA_DAEMON_PLIST and re-running
+           $OLLAMA_DAEMON_INSTALLER. On the wildcard, LAN traffic reaches ollama
+           without passing through Tailscale at all, so no ACL can see it.
+        2. Add a Tailscale ACL restricting dst $HOST:11434 to the nodes that
+           need it, AND narrow the catch-all src/dst rule most tailnets ship
+           with — ACLs are additive allow-lists, so a new narrow rule restricts
            nothing while a permissive one remains.
       Note OLLAMA_ORIGINS is not the answer: it reads like a host allowlist but
       only filters the browser CORS Origin header, so any client that sends no
@@ -1218,8 +1238,8 @@ case "$HOST" in
         ;;
     lem)
         # common_ollama starts the service everywhere. What is lem-specific is
-        # serving it to the tailnet, which needs an agent brew cannot provide.
-        lem_ollama_agent
+        # serving it to the tailnet, which needs a daemon brew cannot provide.
+        ollama_daemon
         lem_msgvault_repo_pull
         # lem is the tailnet's second exit node. On macOS the Tailscale app
         # does its own packet forwarding, so none of the sysctl/ethtool tuning
@@ -1232,6 +1252,9 @@ case "$HOST" in
       autoApprovers rule covering it."
         ;;
     tiptree)
+        # Headless: nobody logs in here, so ollama needs the same system-domain
+        # daemon lem uses. Its plist is tuned smaller and stays on localhost.
+        ollama_daemon
         manual "tiptree: install OpenClaw by hand — see README 'Machines'."
         tiptree_obsidian_headless
         ;;
@@ -1284,6 +1307,15 @@ if [ "$OS" = Darwin ]; then
       qmd collection add ~/Vaults/Main --name obsidian
       qmd update && qmd embed
       See README 'qmd — Local Note Search'."
+    # Installed by the formula list, authorized by nobody: the client secrets
+    # live in the keyring and the tokens come from a browser. Both accounts
+    # matter — a box with only Choufam has no work mail and an incomplete
+    # calendar, and looks like it works.
+    manual "Authorize gog for both Google accounts:
+      gog auth add sean@choufam.com --services all
+      gog auth add sean@isomer.ai --client isomer --services all
+      Clients have to be registered first. See README 'gog — Google Workspace
+      CLI' for the client JSONs, aliases and the domain binding."
 fi
 manual "Pull any local ollama models this box needs — local models are
       machine-specific by design (cloud models are shared and handled by
