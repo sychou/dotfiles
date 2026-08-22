@@ -846,14 +846,35 @@ common_qmd_skill() {
     fi
 }
 
+# mlx-lm is macOS-only: MLX targets Apple silicon, so on wells the install just
+# fails. Kept out of the shared list rather than guarded inside the loop, so the
+# reason is visible where the list is read.
+UV_TOOLS="tldr csvkit"
+UV_TOOLS_DARWIN="mlx-lm"
+
 common_uv() {
-    if command_exists uv; then
-        log "Installing Python tools with uv"
-        uv tool install tldr
-        uv tool install csvkit
-    else
-        warn "uv is missing"
-    fi
+    command_exists uv || { warn "uv is missing"; return 1; }
+
+    log "Installing Python tools with uv"
+
+    local tools="$UV_TOOLS"
+    [ "$OS" = Darwin ] && tools="$tools $UV_TOOLS_DARWIN"
+
+    local t
+    for t in $tools; do
+        # `uv tool install` is a no-op when the receipt exists, even when the
+        # environment behind it does not — which is exactly what bumping the
+        # mise python pin leaves behind. The interpreter the venv was built
+        # against gets uninstalled, every entry point dies with "bad
+        # interpreter", and a plain re-run cheerfully reports success. So repair
+        # on what `uv tool list` actually finds, not on what was recorded.
+        if uv tool list 2>&1 | grep -q "Tool \`${t}\` environment not found"; then
+            log "  $t: environment is missing (python pin bumped?) — reinstalling"
+            uv tool install "$t" --reinstall || warn "could not reinstall $t"
+        else
+            uv tool install "$t" || warn "could not install $t"
+        fi
+    done
 }
 
 common_claude_code() {

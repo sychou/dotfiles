@@ -116,6 +116,7 @@ config alone, but the commit will show as unverified on GitHub.
     - Set up vaults via Sync
     - Place in `~/Vaults` (it will automatically create a subdirectory named after the vault)
 - Index notes in qmd (see [qmd — Local Note Search](#qmd--local-note-search))
+- Authorize gog for both Google accounts (see [gog — Google Workspace CLI](#gog--google-workspace-cli))
 - Pull any local models you rely on — these are machine-specific and the
   bootstrap deliberately does not install them:
   `ollama pull nomic-embed-text` (embeddings), plus whatever chat model you want
@@ -375,7 +376,7 @@ NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari 
 
 ### Runtimes (via mise)
 
-Set globally by the bootstrap: python 3.12, node, bun, go, pnpm.
+Set globally by the bootstrap: python 3.14, node, bun, go, pnpm.
 
 ### Python Tools (via uv)
 
@@ -495,6 +496,52 @@ qmd mcp --http --daemon            # localhost:8181
 ```
 
 Then point Claude Code/Desktop at it (see qmd's `references/mcp-setup.md`).
+
+## gog — Google Workspace CLI
+
+[gog](https://github.com/openclaw/gogcli) fronts Gmail, Calendar, Drive, Docs and
+the rest. The bootstrap installs the binary but authorizes nothing — client
+secrets live in the keyring and tokens come from a browser consent flow, so
+**every new Mac needs this done by hand.**
+
+Two accounts, each on its own OAuth client:
+
+| Alias | Account | Client | Client ID prefix | Cloud project |
+| --- | --- | --- | --- | --- |
+| `choufam` | sean@choufam.com | `default` | `892374733848` | unrecorded — see below |
+| `isomer` | sean@isomer.ai | `isomer` | `578878259075` | `gog-sean-487522` |
+
+Register the clients from their downloaded JSON, then authorize each account:
+
+```sh
+gog auth credentials set <choufam-client.json> --client default
+gog auth credentials set ~/Desktop/ISOMER/LIBRARY/"Google OAuth"/Isomer/client_secret_578878259075-*.json \
+    --client isomer --domain isomer.ai
+gog auth add sean@choufam.com --services all
+gog auth add sean@isomer.ai --client isomer --services all
+gog auth alias set choufam sean@choufam.com
+gog auth alias set isomer sean@isomer.ai
+```
+
+`--domain isomer.ai` binds the second client to the domain, so gog selects it
+automatically and `--client` is never needed again. Grant every scope at the
+consent screen — a partial grant lands as partial scopes and fails later one API
+at a time. Verify with `gog auth list`: both rows should carry the same long
+service list.
+
+**Both accounts matter, and a box with only one looks like it works.** Work mail
+is on sean@isomer.ai, and so is the only complete calendar view — that account
+can see the Isomer, Choufam and Family calendars at once:
+
+```sh
+gog -a isomer calendar events --calendars "Sean (Isomer),Sean (Choufam),Family" --today --plain
+```
+
+**The Choufam client JSON is not filed anywhere.** The Isomer, Sheldon and Agent
+Workplace client secrets are in `~/Desktop/ISOMER/LIBRARY/Google OAuth/`, but the
+one the personal account depends on exists only as a keyring entry on machines
+already set up. Re-download it from its Cloud project and file it with the others
+before that becomes a problem.
 
 ## Ghostty
 
