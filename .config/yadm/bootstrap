@@ -4,13 +4,12 @@
 # Core is installed everywhere. Beyond that a machine declares what it is, and
 # nothing here branches on which machine it happens to be:
 #
-#   yadm config local.roles "workstation,server"
-#
 #   workstation  someone sits at it: GUI apps, fonts, desktop tooling
-#   server       it serves something and runs unattended: no desktop apps
+#   server       it serves something and runs unattended
+#   exit node    it forwards traffic for the rest of the tailnet
 #
-# Roles are additive. lem is both — a daily driver that also serves ollama to
-# the tailnet. Unset defaults to workstation on macOS, server on Linux.
+# Bootstrap asks for each at the start of the run. They are not exclusive —
+# lem is a daily driver that also serves ollama to the tailnet.
 #
 # Genuinely per-machine work is DATA, not branches, and yadm already keys files
 # on hostname:
@@ -18,9 +17,9 @@
 #   ~/.config/launchd/*.plist          system daemons, installed if present
 #   ~/Library/LaunchAgents/*.plist     user agents, materialised by yadm
 #   ~/.config/yadm/host-extras         sourced if present; the one-offs that
-#                                      are neither core nor a role
+#                                      belong to one machine only
 #
-# Adding a machine means declaring its roles and, if it needs them, adding
+# Adding a machine means answering the questions and, if it needs them, adding
 # ##hostname.<host> alts. It does not mean editing this file.
 #
 # Deliberately -u without -e. Bootstrap is best-effort: one package failing
@@ -82,95 +81,35 @@ BIN_DIR="$HOME/.local/bin"
 # (4747fb05)". Recording what we installed sidesteps parsing all of them.
 VERSION_STATE="$HOME/.local/share/yadm-bootstrap/releases"
 
-has_role() {
-    case " $ROLES " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+# Bootstrap is run by hand on a machine someone is setting up, so it asks
+# rather than inferring from the hostname or remembering in a config file.
+ask() {  # question [default]   default is n unless given as y
+    local q=$1 default=${2:-n} ans="" hint="[y/N]"
+    [ "$default" = y ] && hint="[Y/n]"
+    read -r -p "  $q $hint " ans || ans=""
+    [ -n "$ans" ] || ans=$default
+    case "$ans" in [Yy]*) return 0 ;; *) return 1 ;; esac
 }
 
-# The likely answer for this OS: a Mac is someone's desk, a Linux box is
-# something that serves. Used as the prompt's default and as the fallback when
-# there is nobody to ask.
-_default_roles() {
-    case "$OS" in
-        Darwin) echo workstation ;;
-        *)      echo server ;;
-    esac
-}
+# Core installs on every machine. These are the extras.
+WORKSTATION=""
+SERVER=""
+EXIT_NODE=""
 
-# A machine with nothing declared is asked once, and the answer is written to
-# ~/.config/yadm/config — local, untracked, per-machine — so no later run has
-# to ask again. An unattended run must never block on a prompt, so a
-# non-interactive shell takes the default and queues the command instead.
-_declare_roles() {
-    local default; default=$(_default_roles)
+# A Mac is usually someone's desk and a Linux box usually is not, so that is
+# the default answer — not the answer.
+_ws_default=n
+[ "$OS" = Darwin ] && _ws_default=y
 
-    if [ ! -t 0 ]; then
-        ROLES=$default
-        warn "'$HOST' has no roles declared; assuming '$ROLES' for this run"
-        manual "Declare what $HOST is, so it stops being guessed:
-      yadm config local.roles workstation         # someone sits at it
-      yadm config local.roles server              # it serves, unattended
-      yadm config local.roles workstation,server  # both"
-        return 0
-    fi
+echo
+echo "  Setting up $HOST. Core CLI tools and tracked configs install either way."
+echo
+ask "Install GUI apps, fonts and desktop tooling?" "$_ws_default" && WORKSTATION=1
+ask "Set this machine up to run services unattended?" && SERVER=1
+[ -n "$SERVER" ] && ask "Advertise it as a Tailscale exit node?" && EXIT_NODE=1
+echo
 
-    local pick=1
-    [ "$default" = server ] && pick=2
-
-    echo
-    echo "  '$HOST' has no roles declared. What is this machine?"
-    echo
-    echo "    1) workstation   someone sits at it — GUI apps, fonts, desktop tooling"
-    echo "    2) server        it serves something, unattended — no desktop apps"
-    echo "    3) both          a daily driver that also serves"
-    echo
-    local choice=""
-    read -r -p "  Choice [$pick]: " choice || choice=""
-    [ -n "$choice" ] || choice=$pick
-
-    case "$choice" in
-        1|workstation)       ROLES="workstation" ;;
-        2|server)            ROLES="server" ;;
-        3|both)              ROLES="workstation server" ;;
-        *) ROLES="$default"
-           warn "'$choice' is not one of the choices; assuming '$ROLES'" ;;
-    esac
-
-    # Written as a comma list — the form the README documents and the form
-    # `yadm config local.roles` is shown with everywhere else.
-    local stored; stored=$(printf '%s' "$ROLES" | tr ' ' ',')
-    if yadm config local.roles "$stored"; then
-        log "Wrote roles=$stored to ~/.config/yadm/config"
-    else
-        warn "could not write local.roles — this run uses '$ROLES', the next will ask again"
-    fi
-
-    # The one role-adjacent switch worth settling in the same breath, since it
-    # changes how this box joins the tailnet. Answered either way so it is not
-    # asked twice; only servers are candidates.
-    has_role server || return 0
-    [ -n "$(yadm config local.exit-node 2>/dev/null)" ] && return 0
-    local ans=""
-    read -r -p "  Is $HOST a Tailscale exit node? [y/N]: " ans || ans=""
-    case "$ans" in
-        [Yy]*) yadm config local.exit-node true  && log "  exit-node=true" ;;
-        *)     yadm config local.exit-node false && log "  exit-node=false" ;;
-    esac
-    return 0
-}
-
-ROLES=$(yadm config local.roles 2>/dev/null || true)
-# Commas or spaces, either way.
-ROLES=$(printf '%s' "$ROLES" | tr ',' ' ')
-[ -n "$ROLES" ] || _declare_roles
-
-for _r in $ROLES; do
-    case "$_r" in
-        workstation|server) ;;
-        *) warn "unknown role '$_r' in local.roles — known roles: workstation, server" ;;
-    esac
-done
-
-log "os=$OS host=$HOST roles=$ROLES"
+log "os=$OS host=$HOST workstation=${WORKSTATION:-0} server=${SERVER:-0} exit-node=${EXIT_NODE:-0}"
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -319,7 +258,7 @@ CASKS_WORKSTATION=(
 # in here:  yadm config local.cask-exclude "trezor-suite"
 macos_casks() {
     local want=("${CASKS_CORE[@]}") keep=() c x skip
-    has_role workstation && want+=("${CASKS_WORKSTATION[@]}")
+    [ -n "$WORKSTATION" ] && want+=("${CASKS_WORKSTATION[@]}")
 
     local exclude; exclude=$(yadm config local.cask-exclude 2>/dev/null | tr ',' ' ' || true)
 
@@ -334,7 +273,7 @@ macos_casks() {
     log "Installing GUI apps (${#keep[@]} casks)"
     brew install --cask "${keep[@]}"
 
-    has_role workstation && manual "Install the App Store-only apps: NextDNS,
+    [ -n "$WORKSTATION" ] && manual "Install the App Store-only apps: NextDNS,
       Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
       extension). See README 'Mac App Store Only'."
     return 0
@@ -714,8 +653,7 @@ ubuntu_tailscale() {
     # `tailscale set` afterwards. The forwarding sysctls it depends on are
     # applied by the server role.
     local flags="--ssh --advertise-tags=tag:server"
-    [ "$(yadm config local.exit-node 2>/dev/null)" = "true" ] \
-        && flags="$flags --advertise-exit-node"
+    [ -n "$EXIT_NODE" ] && flags="$flags --advertise-exit-node"
     manual "Join the tailnet:  sudo tailscale up $flags
       (tag:server must already exist in the ACL policy. For SSH to work the
       policy also needs an 'ssh' rule whose dst includes tag:server —
@@ -1060,7 +998,7 @@ case "$OS" in
     Darwin)
         macos_prereqs
         macos_formulae
-        has_role workstation && macos_fonts
+        [ -n "$WORKSTATION" ] && macos_fonts
         macos_casks
         # After the casks: the wrapper reads the CLI out of Tailscale.app, which
         # does not exist until the tailscale-app cask has been installed. Called
@@ -1084,7 +1022,7 @@ case "$OS" in
         ubuntu_docker
         # After both, so the origins it allows are ones that now exist.
         ubuntu_unattended_vendors
-        has_role workstation && ubuntu_gui
+        [ -n "$WORKSTATION" ] && ubuntu_gui
         ;;
     *)
         die "unsupported OS: $OS"
@@ -1104,18 +1042,14 @@ common_ollama
 # Roles
 # ---------------------------------------------------------------------------
 
-if has_role server; then
+if [ -n "$EXIT_NODE" ]; then
     # Exit-node duty needs the kernel forwarding packets for other machines.
-    # Opt-in rather than implied by the role: turning on IP forwarding is a
-    # posture change no server should get just for being a server.
-    #   yadm config local.exit-node true
-    if [ "$(yadm config local.exit-node 2>/dev/null)" = "true" ]; then
-        [ "$OS" = Linux ] && ubuntu_exit_node_tuning
-        manual "Approve $HOST as an exit node in the Tailscale admin console
+    # macOS needs none of it — the Tailscale app does its own forwarding.
+    [ "$OS" = Linux ] && ubuntu_exit_node_tuning
+    manual "Approve $HOST as an exit node in the Tailscale admin console
       (Machines -> $HOST -> Edit route settings), or add an autoApprovers rule
       covering it — advertising alone routes nothing. If it joined without the
       flag:  sudo tailscale set --advertise-exit-node"
-    fi
 fi
 
 # The jobs a machine keeps running are tracked plists, so this needs no idea
@@ -1145,7 +1079,7 @@ fi
 # Queued last so they print closest to the prompt, where they will be read.
 # Gated on the role, not the OS: both are about Sean's own accounts and vault,
 # which a machine nobody sits at has no business holding.
-if has_role workstation; then
+if [ -n "$WORKSTATION" ]; then
     # Notes only. Granola meetings moved to msgvault on 2026-08-06 and the
     # `granola` collection was retired — do not re-add it, since a query
     # against a missing collection returns nothing rather than erroring.

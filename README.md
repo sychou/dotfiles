@@ -5,50 +5,30 @@ These dotfiles are managed by [yadm](https://yadm.io/).
 ## What varies between machines
 
 Every machine gets the **same tracked configs and the same core CLI toolchain**.
-Beyond that a machine declares what it is, and the bootstrap never branches on
-which machine it happens to be:
-
-```sh
-yadm config local.roles "workstation,server"
-```
-
-| Role | Means | Gets |
-| --- | --- | --- |
-| `workstation` | someone sits at it | GUI apps, fonts, desktop tooling |
-| `server` | it serves something, unattended | no desktop apps |
-
-Roles are additive — lem is both, a daily driver that also serves ollama to the
-tailnet.
-
-**You do not have to set this up front.** A machine with nothing declared is
-asked once, on its first bootstrap, and the answer is written to
-`~/.config/yadm/config` so no later run asks again:
+Bootstrap is run by hand, so it simply asks what else this one needs:
 
 ```text
-  'huxley' has no roles declared. What is this machine?
+  Setting up huxley. Core CLI tools and tracked configs install either way.
 
-    1) workstation   someone sits at it — GUI apps, fonts, desktop tooling
-    2) server        it serves something, unattended — no desktop apps
-    3) both          a daily driver that also serves
-
-  Choice [1]:
+  Install GUI apps, fonts and desktop tooling? [Y/n]
+  Set this machine up to run services unattended? [y/N]
+  Advertise it as a Tailscale exit node? [y/N]
 ```
 
-The default is `workstation` on macOS and `server` on Linux, so pressing return
-is right most of the time. Picking a server role also asks whether the box is a
-Tailscale exit node, since that changes how it joins the tailnet.
+The answers are independent — lem says yes to the first two, being a daily
+driver that also serves ollama to the tailnet. The GUI question defaults to yes
+on macOS and no on Linux; the rest default to no. The exit-node question is only
+asked if the machine is running services.
 
-A run with no terminal attached never blocks: it takes the OS default, warns
-that it guessed, and queues the `yadm config` command as a manual step.
+Nothing is remembered between runs, and nothing is keyed on the hostname, so
+there is no per-machine state to get stale or wrong. Re-running the bootstrap
+means answering three questions again.
 
-`~/.config/yadm/config` is local and untracked — per-machine state, so it
-survives `yadm pull` and never conflicts.
-
-Two smaller switches, both data rather than code:
+One switch is data rather than a question, because it is a standing property of
+a machine rather than something to decide each time:
 
 ```sh
-yadm config local.exit-node true            # advertise + tune for exit-node duty
-yadm config local.cask-exclude trezor-suite # opt out of individual casks
+yadm config local.cask-exclude trezor-suite   # opt out of individual casks
 ```
 
 ### Per-machine work is data, not branches
@@ -62,12 +42,12 @@ machine is a `##hostname.<host>` alt rather than an arm in the bootstrap:
 - `~/Library/LaunchAgents/<label>.plist` — a LaunchAgent. yadm materialises it
   straight at the load path, so the bootstrap only loads it.
 - `~/.config/yadm/host-extras` — a shell fragment, sourced if present, for the
-  one-offs that are neither core nor a role. It gets `log`, `warn`, `manual`,
+  one-offs that belong to one machine only. It gets `log`, `warn`, `manual`,
   `_cron_entry` and the rest of the bootstrap's helpers.
 
 Only yadm-tracked plists are loaded, so Homebrew's own agents and anything
-installed by hand are left alone. Adding a machine means declaring its roles and,
-if it needs them, adding alts — not editing the bootstrap.
+installed by hand are left alone. Adding a machine means answering the questions
+and, if it needs them, adding alts — not editing the bootstrap.
 
 > **The bootstrap never uninstalls.** Roles and exclusions control what gets
 > *installed*, not what gets removed. A machine that already has extra apps keeps
@@ -121,7 +101,6 @@ running it** — otherwise none of this machine's alts are materialised:
 
 ```sh
 sudo scutil --set LocalHostName <hostname>
-yadm config local.roles "workstation"   # or "server", or both
 ```
 
 ### GitHub & Commit Signing
@@ -184,7 +163,6 @@ Same repo, same bootstrap. `yadm` is in apt, so:
 ```sh
 sudo apt update && sudo apt install -y yadm
 yadm clone https://github.com/sychou/dotfiles
-yadm config local.roles workstation   # only if this box has a display
 ~/.config/yadm/bootstrap
 ```
 
@@ -409,11 +387,12 @@ Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex,
 WhatsApp, Wispr Flow, Zoom
 
 Only the infrastructure half of that list — 1Password, 1Password CLI, Docker
-Desktop, Ghostty, Chrome, Tailscale, VS Code — goes on a `server`. The rest is
-`workstation` only. A single app is dropped by name with
-`yadm config local.cask-exclude`.
+Desktop, Ghostty, Chrome, Tailscale, VS Code — installs on every Mac. The rest
+goes in only if you answer yes to the GUI question. A single app is dropped by
+name with `yadm config local.cask-exclude`.
 
-On Ubuntu there are no casks. A `workstation` gets `ubuntu-desktop-minimal` and
+On Ubuntu there are no casks. Answering yes to the GUI question gets
+`ubuntu-desktop-minimal` and
 `vlc` from apt; the rest — 1Password, Chrome, Obsidian, VS Code, Ghostty —
 install from vendor `.deb`s.
 
