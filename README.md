@@ -18,8 +18,31 @@ yadm config local.roles "workstation,server"
 | `server` | it serves something, unattended | no desktop apps |
 
 Roles are additive — lem is both, a daily driver that also serves ollama to the
-tailnet. Unset defaults to `workstation` on macOS and `server` on Linux, so a
-new box is right before anyone configures it.
+tailnet.
+
+**You do not have to set this up front.** A machine with nothing declared is
+asked once, on its first bootstrap, and the answer is written to
+`~/.config/yadm/config` so no later run asks again:
+
+```text
+  'huxley' has no roles declared. What is this machine?
+
+    1) workstation   someone sits at it — GUI apps, fonts, desktop tooling
+    2) server        it serves something, unattended — no desktop apps
+    3) both          a daily driver that also serves
+
+  Choice [1]:
+```
+
+The default is `workstation` on macOS and `server` on Linux, so pressing return
+is right most of the time. Picking a server role also asks whether the box is a
+Tailscale exit node, since that changes how it joins the tailnet.
+
+A run with no terminal attached never blocks: it takes the OS default, warns
+that it guessed, and queues the `yadm config` command as a manual step.
+
+`~/.config/yadm/config` is local and untracked — per-machine state, so it
+survives `yadm pull` and never conflicts.
 
 Two smaller switches, both data rather than code:
 
