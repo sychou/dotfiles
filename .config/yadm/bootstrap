@@ -1332,11 +1332,11 @@ if [ "$OS" = Darwin ]; then
     # live in the keyring and the tokens come from a browser. Both accounts
     # matter — a box with only Choufam has no work mail and an incomplete
     # calendar, and looks like it works.
-    manual "Authorize gog for both Google accounts:
-      gog auth add sean@choufam.com --services all
-      gog auth add sean@isomer.ai --client isomer --services all
-      Clients have to be registered first. See README 'gog — Google Workspace
-      CLI' for the client JSONs, aliases and the domain binding."
+    manual "Authorize gog for both Google accounts — a box with only the personal
+      one has no work mail and an incomplete calendar, and looks fine.
+      Register both clients first, then 'gog auth add' each account. The
+      accounts, client names and client JSON locations are in the vault note
+      'gog OAuth Setup'; README 'gog — Google Workspace CLI' has the procedure."
 fi
 manual "Pull any local ollama models this box needs — local models are
       machine-specific by design (cloud models are shared and handled by

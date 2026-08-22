@@ -504,50 +504,38 @@ the rest. The bootstrap installs the binary but authorizes nothing — client
 secrets live in the keyring and tokens come from a browser consent flow, so
 **every new Mac needs this done by hand.**
 
-Two accounts, each on its own OAuth client:
-
-| Alias | Account | Client | Client ID prefix | Cloud project |
-| --- | --- | --- | --- | --- |
-| `choufam` | sean@choufam.com | `default` | `892374733848` | `gog-sean` |
-| `isomer` | sean@isomer.ai | `isomer` | `578878259075` | `gog-sean-487522` |
-
-Register the clients from their downloaded JSON, then authorize each account:
+Two accounts, each on its own OAuth client and its own Cloud project. Register
+both clients from their downloaded JSON, then authorize each account:
 
 ```sh
-gog auth credentials set ~/Desktop/LIBRARY/"Google OAuth"/Choufam/client_secret_892374733848-*.json \
-    --client default
-gog auth credentials set ~/Desktop/ISOMER/LIBRARY/"Google OAuth"/Isomer/client_secret_578878259075-*.json \
-    --client isomer --domain isomer.ai
-gog auth add sean@choufam.com --services all
-gog auth add sean@isomer.ai --client isomer --services all
-gog auth alias set choufam sean@choufam.com
-gog auth alias set isomer sean@isomer.ai
+gog auth credentials set <personal-client.json> --client default
+gog auth credentials set <work-client.json> --client <work> --domain <work-domain>
+gog auth add <personal-account> --services all
+gog auth add <work-account> --client <work> --services all
+gog auth alias set <alias> <account>
 ```
 
-`--domain isomer.ai` binds the second client to the domain, so gog selects it
+Quote only the path segment that contains a space — quoting the whole path
+suppresses both `~` expansion and the glob, and gog then fails on a filename that
+does not exist.
+
+`--domain` binds the second client to that domain, so gog selects it
 automatically and `--client` is never needed again. Grant every scope at the
 consent screen — a partial grant lands as partial scopes and fails later one API
 at a time. Verify with `gog auth list`: both rows should carry the same long
 service list.
 
 **Both accounts matter, and a box with only one looks like it works.** Work mail
-is on sean@isomer.ai, and so is the only complete calendar view — that account
-can see the Isomer, Choufam and Family calendars at once:
+is on the work account, and so is the only complete calendar view — only that
+account sees every calendar at once:
 
 ```sh
-gog -a isomer calendar events --calendars "Sean (Isomer),Sean (Choufam),Family" --today --plain
+gog -a <work-alias> calendar events --calendars "..." --today --plain
 ```
 
-**The client secrets live under two different roots — check both.** They follow
-the usual entity/functional split, so the account decides the root:
-
-| Client | Filed at |
-| --- | --- |
-| Choufam, Gmail | `~/Desktop/LIBRARY/Google OAuth/` |
-| Isomer, Sheldon, Agent Workplace | `~/Desktop/ISOMER/LIBRARY/Google OAuth/` |
-
-Looking only in the ISOMER one and concluding the personal client was never
-filed is an easy mistake — it is there, under its own root.
+The accounts themselves, their client names, Cloud projects, and where each
+`client_secret` JSON is filed are in the vault note "gog OAuth Setup" — kept
+there rather than here, because this repo is public.
 
 ## Ghostty
 
