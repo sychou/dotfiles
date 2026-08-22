@@ -12,13 +12,22 @@ Bootstrap is run by hand, so it simply asks what else this one needs:
 
   Install GUI apps, fonts and desktop tooling? [Y/n]
   Set this machine up to run services unattended? [y/N]
+  Is this the msgvault archive server? [y/N]
   Advertise it as a Tailscale exit node? [y/N]
 ```
 
 The answers are independent — lem says yes to the first two, being a daily
 driver that also serves ollama to the tailnet. The GUI question defaults to yes
-on macOS and no on Linux; the rest default to no. The exit-node question is only
-asked if the machine is running services.
+on macOS and no on Linux; the rest default to no.
+
+Two of them are not quite independent. **msgvault implies unattended services**,
+because the archive has to keep running whether or not anyone is logged in — say
+yes to it having said no to the one above and the bootstrap turns that on and
+says so. And the **exit-node question is only asked** of a machine that is
+running services at all.
+
+Saying yes to msgvault schedules the nightly sync-then-backup pass at 06:00,
+which is what wells does, and queues the deploy sequence as a manual step.
 
 Nothing is remembered between runs, and nothing is keyed on the hostname, so
 there is no per-machine state to get stale or wrong. Re-running the bootstrap

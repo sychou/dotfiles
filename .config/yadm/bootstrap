@@ -94,6 +94,7 @@ ask() {  # question [default]   default is n unless given as y
 # Core installs on every machine. These are the extras.
 WORKSTATION=""
 SERVER=""
+MSGVAULT=""
 EXIT_NODE=""
 
 # A Mac is usually someone's desk and a Linux box usually is not, so that is
@@ -106,10 +107,16 @@ echo "  Setting up $HOST. Core CLI tools and tracked configs install either way.
 echo
 ask "Install GUI apps, fonts and desktop tooling?" "$_ws_default" && WORKSTATION=1
 ask "Set this machine up to run services unattended?" && SERVER=1
+# Implies the server answer: the archive is a service that has to keep running
+# whether or not anyone is logged in, so saying yes here says yes to that too.
+if ask "Is this the msgvault archive server?"; then
+    MSGVAULT=1
+    [ -n "$SERVER" ] || { SERVER=1; log "  msgvault: turning on unattended services too"; }
+fi
 [ -n "$SERVER" ] && ask "Advertise it as a Tailscale exit node?" && EXIT_NODE=1
 echo
 
-log "os=$OS host=$HOST workstation=${WORKSTATION:-0} server=${SERVER:-0} exit-node=${EXIT_NODE:-0}"
+log "os=$OS host=$HOST workstation=${WORKSTATION:-0} server=${SERVER:-0} msgvault=${MSGVAULT:-0} exit-node=${EXIT_NODE:-0}"
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -933,6 +940,33 @@ common_ollama() {
     fi
 }
 
+# --- msgvault: the machine that holds the archive ---------------------------
+#
+# Every other box runs the client against it; this is the one that has the
+# archive on disk, syncs the mail accounts, and gets backed up.
+msgvault_server() {
+    command_exists msgvault || {
+        warn "msgvault is not installed here, so nothing can serve the archive"
+        manual "Install msgvault on $HOST, then re-run — see README 'Machines'
+      for the deploy sequence."
+        return 1
+    }
+
+    # One ordered pass over every sync, then the backup — replacing separate
+    # entries sequenced only by guessed timings. 06:00 leaves the
+    # daemon-scheduled mail syncs (02/03/04, in msgvault's own config) clear
+    # ahead of it.
+    if [ "$OS" = Linux ]; then
+        _cron_entry msgvault-nightly "0 6 * * *" "$HOME/bin/msgvault-nightly"
+    else
+        manual "The msgvault nightly sync is not scheduled on $HOST. On macOS
+      that wants a tracked LaunchAgent rather than cron — add
+      Library/LaunchAgents/com.sychou.msgvault-nightly.plist##hostname.$HOST."
+    fi
+
+    manual "msgvault: run the deploy sequence — see README 'Machines'."
+}
+
 # --- launchd units, as tracked files ----------------------------------------
 #
 # Anything a machine keeps running is a tracked plist, so which machine does
@@ -1041,6 +1075,8 @@ common_ollama
 # ---------------------------------------------------------------------------
 # Roles
 # ---------------------------------------------------------------------------
+
+[ -n "$MSGVAULT" ] && msgvault_server
 
 if [ -n "$EXIT_NODE" ]; then
     # Exit-node duty needs the kernel forwarding packets for other machines.
