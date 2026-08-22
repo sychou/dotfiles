@@ -1,0 +1,147 @@
+# tiptree host extras — sourced by ~/.config/yadm/bootstrap
+#
+# Sheldon's box. OpenClaw is installed by hand; obsidian-headless replaces the
+# desktop app, syncing the OpenClaw workspace as the "Sheldon" vault. None of
+# this is core and none of it is a role — it is one machine's job, so it lives
+# in one machine's file.
+#
+# log/warn/manual and the rest of bootstrap's helpers are in scope here.
+
+manual "tiptree: install OpenClaw by hand — see README 'Machines'."
+
+# The sync agent cannot be a tracked plist like every other launchd job here:
+# it must not be loaded until `ob` is logged in and the workspace is linked, and
+# a tracked file would be materialised — and loaded — before either is true,
+# leaving KeepAlive to crash-loop it. So it is generated after the checks below
+# pass.
+#
+#   _launch_agent <label> <extra-plist-keys> <program> [args...]
+#
+# <extra-plist-keys> is raw plist XML for whatever the job needs beyond
+# RunAtLoad.
+_launch_agent() {
+    local label=$1 extra=$2; shift 2
+
+    local args="" a
+    for a in "$@"; do args="$args
+        <string>${a}</string>"; done
+
+    log "Installing the $label LaunchAgent"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+
+    local plist="$HOME/Library/LaunchAgents/${label}.plist"
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>             <string>${label}</string>
+    <key>ProgramArguments</key>
+    <array>${args}
+    </array>
+${extra}
+    <key>RunAtLoad</key>         <true/>
+    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${label}.log</string>
+    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${label}.err</string>
+</dict>
+</plist>
+PLIST
+
+    # bootout first: launchctl refuses to bootstrap a label that is already
+    # loaded, so without this a re-run would silently keep the old plist. It is
+    # expected to fail on a first install, hence the discarded output.
+    launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null
+    launchctl bootstrap "gui/$(id -u)" "$plist" && return 0
+
+    warn "could not load $label; see ~/Library/Logs/${label}.err"
+    return 1
+}
+
+# --- tiptree: the OpenClaw workspace as an Obsidian vault ------------------
+#
+# Sheldon's OpenClaw workspace is mirrored into Obsidian Sync as the "Sheldon"
+# vault, so the agent's working files are readable and reviewable from any
+# machine running Obsidian. tiptree gets obsidian-headless rather than the
+# desktop cask: nobody sits at this box, it only needs to move files.
+#
+# `ob login` is interactive (email, password, MFA), so it cannot run here.
+# Bootstrap detects the session and instructs instead of prompting, which keeps
+# the rest of the run unattended.
+
+OB_VAULT="Sheldon"
+OB_WORKSPACE="$HOME/.openclaw/workspace"
+OB_LABEL="md.obsidian.headless-sync"
+# The mise SHIM, deliberately — not the versioned install path that `npm -g`
+# reports. node is declared as `latest` in the tracked mise config, so
+# .../installs/node/<version>/bin/ob moves the next time that resolves to a
+# new release, leaving the LaunchAgent pointed at a path that no longer
+# exists. The shim survives version bumps.
+OB_BIN="$HOME/.local/share/mise/shims/ob"
+
+tiptree_obsidian_sync_agent() {
+    # WorkingDirectory is load-bearing: `ob sync` resolves which vault it is
+    # operating on from the directory it starts in. KeepAlive because unlike
+    # the ollama agent this one is a one-shot that must not exit — `--continuous`
+    # runs forever, so a crash should bring it straight back.
+    _launch_agent "$OB_LABEL" \
+        "    <key>WorkingDirectory</key>  <string>${OB_WORKSPACE}</string>
+    <key>KeepAlive</key>         <true/>" \
+        "$OB_BIN" sync --continuous || return 1
+
+    log "  continuous sync running — log: ~/Library/Logs/${OB_LABEL}.log"
+    # tiptree is headless and not Sean's machine, so a silently dead sync would
+    # go unnoticed indefinitely, so the run is worth confirming by hand once.
+    manual "Confirm the Obsidian sync is actually running on tiptree — nothing
+      there will surface a failure locally:
+      launchctl print gui/\$(id -u)/${OB_LABEL} | head -20
+      tail ~/Library/Logs/${OB_LABEL}.err"
+}
+
+tiptree_obsidian_headless() {
+    [ -d "$OB_WORKSPACE" ] || {
+        warn "$OB_WORKSPACE not found; install OpenClaw first, then re-run"
+        return 1
+    }
+    command_exists npm || { warn "npm is missing; cannot install obsidian-headless"; return 1; }
+
+    if ! command_exists ob; then
+        log "Installing obsidian-headless (requires node >= 22)"
+        npm install -g obsidian-headless
+        # common_mise already reshimmed, but that was before this install —
+        # without a second pass there is no shim for OB_BIN to point at.
+        mise reshim
+    fi
+
+    # Cheapest authenticated call available; failure means no stored session.
+    if ! ob sync-list-remote >/dev/null 2>&1; then
+        warn "obsidian-headless is not logged in — vault sync is NOT configured."
+        manual "Log in to Obsidian Sync on $HOST, then re-run bootstrap to finish
+      linking the '$OB_VAULT' vault:
+      ob login
+      (interactive: email, password, and 2FA if enabled)"
+        return 1
+    fi
+
+    if ! ob sync-list-remote 2>/dev/null | grep -q "$OB_VAULT"; then
+        log "Creating the remote vault '$OB_VAULT'"
+        ob sync-create-remote --name "$OB_VAULT"
+    fi
+
+    # Ask ob whether this folder is linked rather than inferring it from a
+    # .obsidian directory. That inference was wrong on the first real run:
+    # tiptree's workspace had an EMPTY .obsidian, so the guard skipped
+    # sync-setup, and the agent would have been installed against an unlinked
+    # folder — syncing nothing, reporting success. A directory Obsidian creates
+    # for its own reasons says nothing about Sync being configured.
+    if ob sync-status --path "$OB_WORKSPACE" >/dev/null 2>&1; then
+        log "$OB_WORKSPACE is already linked to a remote vault"
+    else
+        log "Linking $OB_WORKSPACE to the '$OB_VAULT' vault"
+        ob sync-setup --vault "$OB_VAULT" --path "$OB_WORKSPACE" \
+            || { warn "could not link $OB_WORKSPACE to '$OB_VAULT'"; return 1; }
+    fi
+
+    tiptree_obsidian_sync_agent
+}
+
+tiptree_obsidian_headless

@@ -7,9 +7,8 @@
        state. Serves the network (0.0.0.0). FileVault stays ON (SOC2) — after
        an unplanned reboot the pre-boot unlock still needs a console visit;
        use `sudo fdesetup authrestart` for planned reboots to come back
-       unattended. Install with:
-         sudo install -m 644 -o root -g wheel ~/.config/launchd/local.ollama.plist /Library/LaunchDaemons/local.ollama.plist
-         sudo launchctl bootstrap system /Library/LaunchDaemons/local.ollama.plist
+       unattended. Installed by the bootstrap, or by hand with
+       ~/bin/install-launch-daemon.sh ~/.config/launchd/local.ollama.plist
        M4 Pro, 64 GB. Measured: KV cache ~185 KB/token on qwen3.6:35b-mlx,
        allocated lazily. 64K filled ~= 32 GB total, inside the ~48 GB GPU
        budget with headroom for a second loaded model. -->

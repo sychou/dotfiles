@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.sychou.msgvault-repo-sync</string>
+  <!-- lem: pull the msgvault backup repo from wells.
+
+       wells holds the archive and writes snapshots to its own internal drive;
+       lem keeps an offsite copy in the other house. The repo is
+       content-addressed, so this is genuinely incremental — after the first
+       ~91G seed only new packs cross the tailnet, and a night that adds 45,000
+       messages moved 4.1G.
+
+       07:00, an hour after wells' nightly snapshot at 06:00, so a run always
+       replicates a finished snapshot rather than a half-written one.
+       StartCalendarInterval, not StartInterval: this wants a specific hour
+       relative to wells' cron, not "every N seconds from whenever it
+       loaded". -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/rsync</string>
+    <string>-a</string>
+    <string>--partial</string>
+    <string>wells:/home/sean/backups/msgvault/</string>
+    <string>/Users/sean/Backups/msgvault/</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>7</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/sean/Library/Logs/com.sychou.msgvault-repo-sync.log</string>
+  <key>StandardErrorPath</key><string>/Users/sean/Library/Logs/com.sychou.msgvault-repo-sync.err</string>
+</dict>
+</plist>

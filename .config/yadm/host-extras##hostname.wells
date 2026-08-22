@@ -1,0 +1,15 @@
+# wells host extras — sourced by ~/.config/yadm/bootstrap
+#
+# The msgvault server: it holds the archive and syncs Gmail. Everything else
+# wells needs comes from core and the server role — this is only the work no
+# other machine does.
+#
+# log/warn/manual, _cron_entry and the rest of bootstrap's helpers are in scope.
+
+# One ordered pass over every sync, then the backup — replacing the separate
+# calendar/Granola/backup entries that were sequenced only by guessed timings.
+# 06:00 leaves the daemon-scheduled mail syncs (02/03/04, in msgvault's own
+# config) clear ahead of it.
+_cron_entry msgvault-nightly "0 6 * * *" "$HOME/bin/msgvault-nightly"
+
+manual "wells: run the msgvault deploy sequence — see README 'Machines'."

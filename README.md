@@ -5,27 +5,50 @@ These dotfiles are managed by [yadm](https://yadm.io/).
 ## What varies between machines
 
 Every machine gets the **same tracked configs and the same core CLI toolchain**.
-Only two things vary.
-
-**1. GUI apps.** Always installed on macOS. On Linux it is a per-machine choice:
+Beyond that a machine declares what it is, and the bootstrap never branches on
+which machine it happens to be:
 
 ```sh
-yadm config local.gui true
+yadm config local.roles "workstation,server"
 ```
 
-**2. Hostname.** Per-machine one-offs are keyed on `hostname -s`, because these
-machines are not alike enough to share a category — one serves models to the
-network, one is headless, one belongs to someone else. A host with no arm of its
-own still gets everything above; only its extras are skipped.
+| Role | Means | Gets |
+| --- | --- | --- |
+| `workstation` | someone sits at it | GUI apps, fonts, desktop tooling |
+| `server` | it serves something, unattended | no desktop apps |
 
-**OS detection is independent of hostname.** An unrecognised machine still takes
-the correct macOS or Ubuntu path and gets the full core toolchain, and the
-bootstrap says so rather than finishing silently. On macOS it also installs the
-full base cask list, since exclusions are opt-in per host.
+Roles are additive — lem is both, a daily driver that also serves ollama to the
+tailnet. Unset defaults to `workstation` on macOS and `server` on Linux, so a
+new box is right before anyone configures it.
 
-> **The bootstrap never uninstalls.** The per-machine cask lists control what
-> gets *installed*, not what gets removed. A machine that already has extra apps
-> keeps them until you `brew uninstall --cask` them yourself.
+Two smaller switches, both data rather than code:
+
+```sh
+yadm config local.exit-node true            # advertise + tune for exit-node duty
+yadm config local.cask-exclude trezor-suite # opt out of individual casks
+```
+
+### Per-machine work is data, not branches
+
+yadm already selects files by hostname, so anything genuinely specific to one
+machine is a `##hostname.<host>` alt rather than an arm in the bootstrap:
+
+- `~/.config/launchd/<label>.plist` — a LaunchDaemon. Copied into
+  `/Library/LaunchDaemons` and loaded in the system domain, for jobs that must
+  run with nobody logged in.
+- `~/Library/LaunchAgents/<label>.plist` — a LaunchAgent. yadm materialises it
+  straight at the load path, so the bootstrap only loads it.
+- `~/.config/yadm/host-extras` — a shell fragment, sourced if present, for the
+  one-offs that are neither core nor a role. It gets `log`, `warn`, `manual`,
+  `_cron_entry` and the rest of the bootstrap's helpers.
+
+Only yadm-tracked plists are loaded, so Homebrew's own agents and anything
+installed by hand are left alone. Adding a machine means declaring its roles and,
+if it needs them, adding alts — not editing the bootstrap.
+
+> **The bootstrap never uninstalls.** Roles and exclusions control what gets
+> *installed*, not what gets removed. A machine that already has extra apps keeps
+> them until you `brew uninstall --cask` them yourself.
 
 ## Setting Up a New Mac
 
@@ -70,11 +93,12 @@ fonts, mise runtimes, Python tools, and Claude Code. (The
 bootstrap itself re-runs the brew `shellenv` step internally, so it works even
 on a fresh machine.)
 
-It picks the cask list from `hostname -s`, so **set the hostname before running
-it** — otherwise the machine gets the full base list:
+yadm selects per-machine files by `hostname -s`, so **set the hostname before
+running it** — otherwise none of this machine's alts are materialised:
 
 ```sh
 sudo scutil --set LocalHostName <hostname>
+yadm config local.roles "workstation"   # or "server", or both
 ```
 
 ### GitHub & Commit Signing
@@ -137,7 +161,7 @@ Same repo, same bootstrap. `yadm` is in apt, so:
 ```sh
 sudo apt update && sudo apt install -y yadm
 yadm clone https://github.com/sychou/dotfiles
-yadm config local.gui true      # only if this box has a display
+yadm config local.roles workstation   # only if this box has a display
 ~/.config/yadm/bootstrap
 ```
 
@@ -361,12 +385,14 @@ Logi Options+, Microsoft Teams, MonitorControl, Obsidian, Signal, Slack,
 Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex,
 WhatsApp, Wispr Flow, Zoom
 
-Machines that need a narrower set — a shared box, a headless one — list their
-exclusions in the bootstrap's cask arrays, and opt out by name.
+Only the infrastructure half of that list — 1Password, 1Password CLI, Docker
+Desktop, Ghostty, Chrome, Tailscale, VS Code — goes on a `server`. The rest is
+`workstation` only. A single app is dropped by name with
+`yadm config local.cask-exclude`.
 
-On Ubuntu there are no casks. With `yadm config local.gui true` the box gets
-`ubuntu-desktop-minimal` and `vlc` from apt; the rest — 1Password, Chrome,
-Obsidian, VS Code, Ghostty — install from vendor `.deb`s.
+On Ubuntu there are no casks. A `workstation` gets `ubuntu-desktop-minimal` and
+`vlc` from apt; the rest — 1Password, Chrome, Obsidian, VS Code, Ghostty —
+install from vendor `.deb`s.
 
 ### Mac App Store Only
 

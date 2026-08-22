@@ -1,23 +1,27 @@
 #!/bin/bash
 # yadm bootstrap — macOS and Ubuntu
 #
-# Every machine gets the same core CLI toolchain and the same tracked configs.
-# Two things vary:
+# Core is installed everywhere. Beyond that a machine declares what it is, and
+# nothing here branches on which machine it happens to be:
 #
-#   1. gui       — whether GUI apps are installed. True on macOS; on Linux it
-#                  is a per-machine choice: yadm config local.gui true
-#   2. hostname  — each machine's one-off role, below. These are deliberately
-#                  keyed on hostname rather than a class, because no two of
-#                  them are alike enough to share a category.
+#   yadm config local.roles "workstation,server"
 #
-#   verne    macOS    daily driver + dev
-#   lem      macOS    daily driver + dev; ollama served to the tailnet
-#                     (wells embeds against it), tailnet exit node (the
-#                     second, alongside wells)
-#   tiptree  macOS    Sheldon's box; OpenClaw (installed by hand). Runs
-#                     obsidian-headless instead of the desktop app, syncing
-#                     the OpenClaw workspace as the "Sheldon" vault.
-#   wells    Ubuntu   msgvault server + Gmail sync
+#   workstation  someone sits at it: GUI apps, fonts, desktop tooling
+#   server       it serves something and runs unattended: no desktop apps
+#
+# Roles are additive. lem is both — a daily driver that also serves ollama to
+# the tailnet. Unset defaults to workstation on macOS, server on Linux.
+#
+# Genuinely per-machine work is DATA, not branches, and yadm already keys files
+# on hostname:
+#
+#   ~/.config/launchd/*.plist          system daemons, installed if present
+#   ~/Library/LaunchAgents/*.plist     user agents, materialised by yadm
+#   ~/.config/yadm/host-extras         sourced if present; the one-offs that
+#                                      are neither core nor a role
+#
+# Adding a machine means declaring its roles and, if it needs them, adding
+# ##hostname.<host> alts. It does not mean editing this file.
 #
 # Deliberately -u without -e. Bootstrap is best-effort: one package failing
 # should not abandon the other forty. But an unset variable is always a typo,
@@ -50,20 +54,20 @@ manual() { MANUAL+=("$*"); }
 OS=$(uname -s)
 HOST=$(hostname -s)
 
-# Every per-machine branch keys on $HOST, so a wrong answer here silently skips
-# all of them. `hostname` returns macOS's HostName, which when unset falls back
-# to a reverse-DNS lookup of the current IP — on some networks that is
-# dhcp-10-0-1-5 rather than the machine's name. LocalHostName is not used as the
-# value (it is the Bonjour name, only coincidentally equal), but disagreeing
-# with it is a reliable signal that the network has renamed us.
+# yadm selects ##hostname.<host> alts by this name, so a wrong answer here
+# silently skips every per-machine file. `hostname` returns macOS's HostName,
+# which when unset falls back to a reverse-DNS lookup of the current IP — on
+# some networks that is dhcp-10-0-1-5 rather than the machine's name.
+# LocalHostName is not used as the value (it is the Bonjour name, only
+# coincidentally equal), but disagreeing with it says the network renamed us.
 if [ "$OS" = Darwin ]; then
     _local_name=$(scutil --get LocalHostName 2>/dev/null || echo "")
     if [ -n "$_local_name" ] && [ "$_local_name" != "$HOST" ]; then
         # One warn, then plain logs — the continuation lines are the same single
         # problem and must not each bump the failure count.
         warn "hostname says '$HOST' but LocalHostName says '$_local_name'."
-        log  "  The network may have renamed this machine. Per-machine setup keys"
-        log  "  on '$HOST' and will be skipped if that is not what you expect."
+        log  "  The network may have renamed this machine; its per-machine files"
+        log  "  are keyed on '$HOST' and will be skipped if that is wrong."
     fi
 fi
 
@@ -78,14 +82,31 @@ BIN_DIR="$HOME/.local/bin"
 # (4747fb05)". Recording what we installed sidesteps parsing all of them.
 VERSION_STATE="$HOME/.local/share/yadm-bootstrap/releases"
 
-# GUI apps: always on macOS, opt-in on Linux.
-gui=""
-case "$OS" in
-    Darwin) gui=1 ;;
-    Linux)  [ "$(yadm config local.gui 2>/dev/null)" = "true" ] && gui=1 ;;
-esac
+# What this machine is. Unset means the common case for its OS, so a new box
+# is correct before anyone configures it: a Mac is someone's desk, a Linux box
+# is something that serves.
+ROLES=$(yadm config local.roles 2>/dev/null || true)
+if [ -z "$ROLES" ]; then
+    case "$OS" in
+        Darwin) ROLES=workstation ;;
+        Linux)  ROLES=server ;;
+    esac
+fi
+# Commas or spaces, either way.
+ROLES=$(printf '%s' "$ROLES" | tr ',' ' ')
 
-log "os=$OS host=$HOST gui=${gui:-0}"
+has_role() {
+    case " $ROLES " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+for _r in $ROLES; do
+    case "$_r" in
+        workstation|server) ;;
+        *) warn "unknown role '$_r' in local.roles — known roles: workstation, server" ;;
+    esac
+done
+
+log "os=$OS host=$HOST roles=$ROLES"
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -93,6 +114,14 @@ log "os=$OS host=$HOST gui=${gui:-0}"
 # Used by both OS paths, so they live above the platform sections rather than
 # inside either one.
 # ---------------------------------------------------------------------------
+
+# bootstrap manages what yadm tracks and nothing else — a plist someone
+# installed by hand, and Homebrew's own agents, are not ours to reload.
+_yadm_tracked() {  # absolute path -> 0 if yadm tracks it
+    ( cd "$HOME" && yadm ls-files --error-unmatch "${1#"$HOME"/}" >/dev/null 2>&1 )
+}
+
+LAUNCH_DAEMON_INSTALLER="$HOME/bin/install-launch-daemon.sh"
 
 _version_installed() {  # name -> prints the recorded version, if any
     [ -f "$VERSION_STATE" ] || return 0
@@ -208,54 +237,43 @@ macos_fonts() {
         font-jetbrains-mono-nerd-font
 }
 
-# One base list, small per-host exclusions. Adding an app means editing one
-# array; a machine opts out by name. Keeps the three Macs from drifting into
-# three independently-maintained lists.
-CASKS=(
-    1password 1password-cli bambu-studio boop chatgpt claude cleanshot
-    discord docker-desktop ghostty google-chrome granola handbrake-app
-    logi-options+ microsoft-teams monitorcontrol obsidian signal slack
-    spotify tailscale-app telegram trezor-suite visual-studio-code vlc
-    webex whatsapp wispr-flow zoom
+# Infrastructure every Mac needs, headless ones included: the password store,
+# the terminal, the browser, the editor, containers, the tailnet.
+CASKS_CORE=(
+    1password 1password-cli docker-desktop ghostty google-chrome
+    tailscale-app visual-studio-code
 )
 
+# Apps that only mean anything to someone sitting at the machine.
+CASKS_WORKSTATION=(
+    bambu-studio boop chatgpt claude cleanshot discord granola handbrake-app
+    logi-options+ microsoft-teams monitorcontrol obsidian signal slack spotify
+    telegram trezor-suite vlc webex whatsapp wispr-flow zoom
+)
+
+# A machine opts out of individual casks by name, as data rather than an arm
+# in here:  yadm config local.cask-exclude "trezor-suite"
 macos_casks() {
-    local exclude=() keep=() c x skip
+    local want=("${CASKS_CORE[@]}") keep=() c x skip
+    has_role workstation && want+=("${CASKS_WORKSTATION[@]}")
 
-    case "$HOST" in
-        lem)
-            exclude=(trezor-suite)
-            ;;
-        tiptree)
-            # Sheldon's box. OpenClaw is the assistant here, so the other AI
-            # desktop apps go; no personal comms, media, or hardware utilities.
-            # obsidian is excluded in favour of obsidian-headless — this box has
-            # no one sitting at it, it just needs to push the vault to Sync.
-            exclude=(
-                trezor-suite discord signal telegram whatsapp microsoft-teams
-                webex zoom claude chatgpt boop granola wispr-flow spotify vlc
-                handbrake-app logi-options+ bambu-studio obsidian
-            )
-            ;;
-    esac
+    local exclude; exclude=$(yadm config local.cask-exclude 2>/dev/null | tr ',' ' ' || true)
 
-    for c in "${CASKS[@]}"; do
+    for c in "${want[@]}"; do
         skip=""
-        # ${a[@]+"${a[@]}"} rather than plain "${exclude[@]}": macOS ships bash
-        # 3.2, where expanding an empty array under `set -u` is an unbound
-        # variable error. Hosts with no exclusions (verne) hit exactly that.
-        for x in ${exclude[@]+"${exclude[@]}"}; do
+        for x in $exclude; do
             [ "$c" = "$x" ] && { skip=1; break; }
         done
         [ -z "$skip" ] && keep+=("$c")
     done
 
-    log "Installing GUI apps (${#keep[@]} casks for $HOST)"
+    log "Installing GUI apps (${#keep[@]} casks)"
     brew install --cask "${keep[@]}"
 
-    manual "Install the App Store-only apps: NextDNS, Paprika Recipe Manager 3,
-      Pixelmator Pro, Obsidian Web Clipper (Safari extension).
-      See README 'Mac App Store Only'."
+    has_role workstation && manual "Install the App Store-only apps: NextDNS,
+      Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
+      extension). See README 'Mac App Store Only'."
+    return 0
 }
 
 macos_tailscale_cli() {
@@ -271,31 +289,24 @@ macos_tailscale_cli() {
 
 macos_1password_agent() {
     # ~/.ssh/config points IdentityAgent at ~/.1password/agent.sock, the one
-    # path that reads the same on macOS and Linux. On macOS nothing listens
-    # there: the agent lives inside the app's group container, so the shared
-    # path only exists if something links it. A fresh Mac has no link, and the
-    # failure is silent and misleading — ssh reports the socket missing, falls
-    # back to ~/.ssh/id_* keys that were never generated, and every host the
-    # 1Password keys unlock answers "Permission denied (publickey)".
-    #
-    # Linked unconditionally rather than only when the socket already exists:
-    # the agent is off until it is enabled by hand below, and a dangling
-    # symlink resolves the moment it comes up.
+    # path that reads the same on both OSes; on macOS the real socket is inside
+    # the app's group container, so nothing listens there until this link
+    # exists. Without it ssh falls back to keys that were never generated and
+    # every 1Password-backed host answers "Permission denied (publickey)".
+    # Linked unconditionally — a dangling symlink resolves the moment the agent
+    # is switched on.
     [ -d "/Applications/1Password.app" ] || return 0
     log "Linking the 1Password SSH agent socket"
     mkdir -p "$HOME/.1password"
     ln -sfn "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" \
         "$HOME/.1password/agent.sock"
 
-    # The github.com block in ~/.ssh/config selects its key by public-key file
-    # under IdentitiesOnly, so ~/.ssh/github.pub has to exist even though the
-    # private half never leaves 1Password. It is derived, not secret, so it is
-    # written here rather than tracked. Only the agent can answer for it, and
-    # the agent is off until the manual step below — so a first run on a fresh
-    # Mac writes nothing, and the re-run afterwards fills it in.
-    #
-    # Staged through a temp file: a failed or empty read must leave a working
-    # github.pub alone rather than truncating it.
+    # ~/.ssh/config selects its github.com key by public-key file under
+    # IdentitiesOnly, so github.pub must exist even though the private half
+    # never leaves 1Password. Derived, not secret, hence written rather than
+    # tracked — and only the agent can answer for it, so a fresh Mac writes
+    # nothing until the manual step below is done and bootstrap is re-run.
+    # Staged through a temp file so a failed read cannot truncate a good one.
     local pub="$HOME/.ssh/github.pub"
     mkdir -p "$HOME/.ssh"
     if SSH_AUTH_SOCK="$HOME/.1password/agent.sock" ssh-add -L 2>/dev/null \
@@ -422,17 +433,10 @@ ubuntu_scripts() {
     command_exists starship || { log "Installing starship"; curl -sS https://starship.rs/install.sh | sh -s -- -y; }
     command_exists opencode || { log "Installing opencode"; curl -fsSL https://opencode.ai/install | bash; }
 
-    # ollama on every machine. The Linux installer registers a systemd unit at
-    # /etc/systemd/system/ollama.service, so it survives reboot without any
-    # extra work; macOS gets the equivalent from brew services in
-    # common_ollama, which also pulls the shared cloud models on both OSes.
-    #
-    # Models are NOT pulled here; those stay machine-specific:
-    #   ollama pull nomic-embed-text
-    #
-    # GPU is opt-in and separate: NVIDIA needs CUDA drivers installed
-    # (verify with nvidia-smi), AMD needs the extra ROCm package
-    # (ollama-linux-amd64-rocm.tar.zst). Without either it runs CPU-only.
+    # The Linux installer registers its own systemd unit, so it survives reboot
+    # unaided; macOS gets the equivalent from common_ollama. Local models are
+    # machine-specific and pulled by hand. GPU is opt-in and separate — NVIDIA
+    # needs CUDA drivers, AMD the ROCm package; without either it runs CPU-only.
     command_exists ollama || { log "Installing ollama"; curl -fsSL https://ollama.com/install.sh | sh; }
 
     # nerdfetch is a single POSIX shell script, not a package
@@ -570,17 +574,12 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
 }
 
 ubuntu_unattended_vendors() {
-    # Ubuntu's shipped Allowed-Origins covers ${distro_id} only, so every
-    # vendor repo below — tailscale, docker, gh — gets security updates just
-    # when someone remembers to run `apt upgrade`. On a box reachable over the
-    # tailnet that runs unattended for weeks, that is the wrong default.
-    #
-    # A drop-in rather than an edit to 50unattended-upgrades: that file is a
-    # dpkg conffile, so a package upgrade prompts about local modifications.
-    # Origins-Pattern is additive across apt.conf.d, and matching on origin=
-    # alone avoids depending on a Suite field that Tailscale does not publish
-    # (it sets Codename but no Suite, so the "Origin:Suite" shorthand cannot
-    # match it).
+    # Ubuntu's shipped Allowed-Origins covers ${distro_id} only, so the vendor
+    # repos — tailscale, docker, gh — are patched only when someone remembers
+    # to run `apt upgrade`. A drop-in rather than editing 50unattended-upgrades,
+    # which is a dpkg conffile and would prompt on every package upgrade.
+    # Matching on origin= alone: Tailscale publishes no Suite field, so the
+    # "Origin:Suite" shorthand cannot match it.
     log "Extending unattended-upgrades to the vendor repositories"
     sudo tee /etc/apt/apt.conf.d/51unattended-upgrades-vendors >/dev/null <<'EOF'
 // Managed by yadm bootstrap. Vendor repos are not covered by the
@@ -647,13 +646,12 @@ ubuntu_tailscale() {
     log "Installing Tailscale"
     curl -fsSL https://tailscale.com/install.sh | sh
 
-    # wells is one of the tailnet's two exit nodes (lem is the other, but lem
-    # is macOS and never reaches this function — its arm handles it), so its
-    # join advertises that up front rather than needing a second `tailscale
-    # set` later. The forwarding sysctls it depends on are handled in the
-    # wells one-off arm.
+    # An exit node advertises that at join time rather than needing a second
+    # `tailscale set` afterwards. The forwarding sysctls it depends on are
+    # applied by the server role.
     local flags="--ssh --advertise-tags=tag:server"
-    [ "$HOST" = wells ] && flags="$flags --advertise-exit-node"
+    [ "$(yadm config local.exit-node 2>/dev/null)" = "true" ] \
+        && flags="$flags --advertise-exit-node"
     manual "Join the tailnet:  sudo tailscale up $flags
       (tag:server must already exist in the ACL policy. For SSH to work the
       policy also needs an 'ssh' rule whose dst includes tag:server —
@@ -674,14 +672,11 @@ EOF
     sudo sysctl -q -p /etc/sysctl.d/99-tailscale.conf \
         || warn "could not apply the forwarding sysctls"
 
-    # UDP GRO forwarding: tailscaled warns about this on `up` and it measurably
-    # improves forwarded-UDP (i.e. WireGuard relay) throughput. ethtool settings
-    # do not survive reboot, so a oneshot unit reapplies them at boot. The
-    # logic lives in a script rather than inline in ExecStart= — systemd does
-    # its own $-expansion and backslash handling on that line, which silently
-    # mangles shell variables and sed escapes. The NIC is detected at runtime,
-    # so a hardware change does not leave the tuning pointed at a dead
-    # interface. Best-effort — some drivers mark these features [fixed].
+    # UDP GRO forwarding measurably improves relayed-WireGuard throughput, and
+    # tailscaled warns when it is off. ethtool settings do not survive reboot,
+    # hence a oneshot unit. The logic is a script rather than inline ExecStart=,
+    # which does its own $-expansion and mangles shell escapes. Best-effort —
+    # some drivers report these features [fixed].
     log "Enabling UDP GRO forwarding for exit-node throughput"
     sudo tee /usr/local/sbin/tailscale-udp-gro >/dev/null <<'EOF'
 #!/bin/sh
@@ -754,22 +749,14 @@ common_zsh() {
     fi
 }
 
-# The dotfiles repo went private on 2026-08-05, and every machine has since had
-# to prove who it is. That broke differently on each one and was rediscovered
-# three times, so bootstrap now checks up front and says what to do.
-#
-# There is no single right answer, because the machines genuinely differ:
-#
-#   lem      HTTPS + the gh credential helper. SSH does NOT work unattended
-#            here — 1Password requires interactive approval to *sign*, so
-#            listing keys succeeds while signing fails.
-#   verne    SSH + the 1Password agent, which signs without prompting.
-#   wells    SSH + a read-only repo deploy key. Headless, no 1Password, and gh
-#            tokens expire silently.
-#   tiptree  SSH + a read-only repo deploy key. Not Sean's account at all.
-#
-# A failed fetch is quiet in the worst way: `yadm fetch -q` swallows the error,
-# and the machine then reports "0 commits behind" while being ten behind.
+# Every machine has to prove who it is to the dotfiles remote, and there is no
+# single right answer: a machine with an unattended-signing key uses SSH, one
+# where 1Password needs interactive approval to *sign* must use HTTPS and the
+# gh helper (listing keys succeeds there while signing fails), and a headless
+# box or one not on Sean's account uses a read-only deploy key. So bootstrap
+# only detects the failure and says what to do — because a failed fetch is
+# quiet in the worst way: `yadm fetch -q` swallows it and the machine then
+# reports "0 commits behind" while being ten behind.
 common_repo_access() {
     command_exists yadm || return 0
 
@@ -826,18 +813,11 @@ common_mise() {
 }
 
 common_qmd_skill() {
-    # qmd itself is declared in ~/.config/mise/config.toml and installed by
-    # common_mise; only its Claude skill is installed here.
-    #
-    # It used to be `npm install -g @tobilu/qmd`, which writes into the
-    # mise-managed node's own lib/node_modules — so every node upgrade moved to
-    # a fresh install dir and silently took qmd with it. lem and tiptree both
-    # lost their copy that way; wells kept a stale one because its mise config
-    # predated the declaration. The mise-declared tool survives node upgrades
-    # and is the copy `brewup` already upgrades.
-    #
-    # Guarded on qmd, not npm: npm being present says nothing about whether
-    # mise actually installed the tool this step needs.
+    # qmd is declared in ~/.config/mise/config.toml and installed by
+    # common_mise; only its Claude skill is installed here. It is not an
+    # `npm install -g`, which writes into the mise-managed node's own
+    # lib/node_modules and so vanishes on every node upgrade. Guarded on qmd
+    # rather than npm: npm being present says nothing about the tool existing.
     if command_exists qmd; then
         log "Installing the qmd Claude skill"
         qmd skill install --global --yes -f
@@ -920,17 +900,12 @@ common_ollama() {
     # because `brew services start` errors on an already-running service.
     if [ "$OS" = Darwin ]; then
         # Where our own local.ollama already owns ollama, leave brew's service
-        # alone — both want :11434 and only one can have it. Checked by what is
-        # installed rather than by hostname, so this stays correct as the role
-        # moves between machines.
-        #
-        # BOTH domains, because the plist is not always the same shape: verne
-        # runs it as a gui-domain LaunchAgent, lem and tiptree as a system-domain
-        # LaunchDaemon. A gui-only check misses the daemon hosts entirely and
-        # starts a second ollama that loses the race for :11434 and then
-        # crash-loops under KeepAlive. The plist test comes first because it
-        # needs no privileges: `launchctl print system/...` is not reliably
-        # readable as a non-root user.
+        # alone — both want :11434 and only one can have it. BOTH domains,
+        # because the plist is a gui agent on some machines and a system daemon
+        # on others, and a gui-only check starts a second ollama that loses the
+        # race and crash-loops under KeepAlive. The file test comes first: it
+        # needs no privileges, and `launchctl print system/...` is not reliably
+        # readable as non-root.
         if [ -f "/Library/LaunchDaemons/${OLLAMA_LABEL}.plist" ] \
            || launchctl print "gui/$(id -u)/${OLLAMA_LABEL}" >/dev/null 2>&1; then
             log "ollama is managed by $OLLAMA_LABEL; leaving brew services alone"
@@ -956,243 +931,61 @@ common_ollama() {
     fi
 }
 
-# --- LaunchAgents -----------------------------------------------------------
+# --- launchd units, as tracked files ----------------------------------------
 #
-# Both scheduled jobs below want the same plist envelope, the same log paths,
-# and the same unload-then-load dance; they differ only in the label, the
-# command, and one or two scheduling keys. Those are the arguments, and
-# everything else lives here once.
-#
-#   _launch_agent <label> <extra-plist-keys> <program> [args...]
-#
-# <extra-plist-keys> is raw plist XML for whatever the job needs beyond
-# RunAtLoad — StartInterval for a periodic job, KeepAlive and WorkingDirectory
-# for a resident one. Raw XML rather than a named option per launchd key: there
-# are dozens of keys and this would otherwise grow a parameter every time one
-# of them is needed.
-_launch_agent() {
-    local label=$1 extra=$2; shift 2
+# Anything a machine keeps running is a tracked plist, so which machine does
+# which job is recorded by which files exist. Agents under
+# ~/Library/LaunchAgents are materialised by yadm at the load path and only
+# need loading; daemons are staged in ~/.config/launchd and copied into
+# /Library/LaunchDaemons, which needs root. Only yadm-tracked plists are
+# touched — jobs installed by hand, and Homebrew's own agents, are left alone.
+macos_launch_units() {
+    local plist label
 
-    local args="" a
-    for a in "$@"; do args="$args
-        <string>${a}</string>"; done
+    for plist in "$HOME"/Library/LaunchAgents/*.plist; do
+        [ -f "$plist" ] || continue
+        _yadm_tracked "$plist" || continue
+        label=$(basename "$plist" .plist)
+        # bootout first: launchctl refuses to bootstrap a label already loaded,
+        # so without it an edited plist would never take. Expected to fail when
+        # nothing is loaded yet, hence the discarded output.
+        launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null
+        if launchctl bootstrap "gui/$(id -u)" "$plist"; then
+            log "Loaded the $label LaunchAgent"
+        else
+            warn "could not load the $label LaunchAgent"
+        fi
+    done
 
-    log "Installing the $label LaunchAgent"
-    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+    for plist in "$HOME"/.config/launchd/*.plist; do
+        [ -f "$plist" ] || continue
+        _yadm_tracked "$plist" || continue
+        label=$(basename "$plist" .plist)
 
-    local plist="$HOME/Library/LaunchAgents/${label}.plist"
-    cat > "$plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>             <string>${label}</string>
-    <key>ProgramArguments</key>
-    <array>${args}
-    </array>
-${extra}
-    <key>RunAtLoad</key>         <true/>
-    <key>StandardOutPath</key>   <string>${HOME}/Library/Logs/${label}.log</string>
-    <key>StandardErrorPath</key> <string>${HOME}/Library/Logs/${label}.err</string>
-</dict>
-</plist>
-PLIST
+        # The installer needs sudo for the system domain, and the rest of the
+        # macOS path deliberately never prompts — a bootstrap that blocks on a
+        # password cannot run unattended on a fresh box. So: run it when a sudo
+        # timestamp is already open, queue it when it is not.
+        if sudo -n true 2>/dev/null; then
+            "$LAUNCH_DAEMON_INSTALLER" "$plist" \
+                || warn "could not install the $label LaunchDaemon"
+        else
+            manual "Install the $label LaunchDaemon (needs sudo):
+      $LAUNCH_DAEMON_INSTALLER $plist"
+        fi
 
-    # bootout first: launchctl refuses to bootstrap a label that is already
-    # loaded, so without this a re-run would silently keep the old plist. It is
-    # expected to fail on a first install, hence the discarded output.
-    launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null
-    launchctl bootstrap "gui/$(id -u)" "$plist" && return 0
-
-    warn "could not load $label; see ~/Library/Logs/${label}.err"
-    return 1
-}
-
-# --- lem: pull the msgvault backup repo from wells --------------------------
-#
-# wells holds the archive and writes snapshots to its own internal drive; lem
-# keeps an offsite copy in the other house. The repo is content-addressed, so
-# this is genuinely incremental — after the first ~91G seed only new packs
-# cross the tailnet, and a night that adds 45,000 messages moved 4.1G.
-#
-# 07:00, an hour after wells' nightly snapshot at 06:00, so a run always
-# replicates a finished snapshot rather than a half-written one.
-MSGVAULT_PULL_LABEL="com.sychou.msgvault-repo-sync"
-
-lem_msgvault_repo_pull() {
-    # StartCalendarInterval, not StartInterval: this wants a specific hour
-    # relative to wells' cron, not "every N seconds from whenever it loaded".
-    _launch_agent "$MSGVAULT_PULL_LABEL" \
-        "    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>    <integer>7</integer>
-        <key>Minute</key>  <integer>0</integer>
-    </dict>" \
-        /usr/bin/rsync -a --partial \
-        "wells:/home/sean/backups/msgvault/" "$HOME/Backups/msgvault/" || return 1
-
-    log "  pulling wells' backup repo nightly at 07:00"
-}
-
-# --- ollama as a system daemon (lem, tiptree) -------------------------------
-#
-# lem holds the local models nothing else here can run — an M4 Pro against
-# wells' CPU-only box. wells embeds its msgvault archive against this endpoint:
-# measured ~1s per batch over the tailnet versus ~11s on wells' own CPU, which
-# over a 20G archive is the difference between hours and days. tiptree runs the
-# same daemon for OpenClaw — smaller, and localhost-only.
-#
-# Homebrew's service cannot do either job. Its plist declares
-# EnvironmentVariables straight from the formula, and a plist that declares that
-# dict receives exactly it — `launchctl setenv OLLAMA_HOST` does not merge in,
-# which is why setting it that way appears to work and changes nothing. Editing
-# brew's copy does work, until the next `brew services` run regenerates the
-# plist from the formula and silently reverts it.
-#
-# The plist is NOT generated here. It is tracked per host as a yadm alt at
-# ~/.config/launchd/local.ollama.plist##hostname.<host>, so the tuning that
-# belongs to a machine — its context ceiling against its GPU budget, whether it
-# binds the wildcard — sits next to that machine's measured numbers instead of
-# in a heredoc. bin/install-ollama-daemon.sh copies the file into
-# /Library/LaunchDaemons and bootstraps it in the system domain: a daemon, not
-# an agent, because both boxes must serve with nobody logged in.
-#
-# This replaced a version that generated a competing LaunchAgent under the same
-# label. Labels are unique per domain, so it did not collide — it loaded
-# alongside the daemon, lost the race for :11434, and crash-looped under
-# KeepAlive while the daemon carried on serving.
-OLLAMA_DAEMON_PLIST="$HOME/.config/launchd/${OLLAMA_LABEL}.plist"
-OLLAMA_DAEMON_INSTALLER="$HOME/bin/install-ollama-daemon.sh"
-
-ollama_daemon() {
-    [ -f "$OLLAMA_DAEMON_PLIST" ] || {
-        warn "no tracked ${OLLAMA_LABEL}.plist for '$HOST' — yadm materialises it
-      from a ##hostname.$HOST alt; check ~/.config/launchd/"
-        return 1
-    }
-    [ -x "$OLLAMA_DAEMON_INSTALLER" ] \
-        || { warn "$OLLAMA_DAEMON_INSTALLER is missing or not executable"; return 1; }
-
-    # The installer needs sudo for the system domain, and the rest of the macOS
-    # path deliberately never prompts — a bootstrap that blocks on a password is
-    # one that cannot run unattended on a fresh box. So: run it when a sudo
-    # timestamp is already open, queue it as a manual step when it is not.
-    if sudo -n true 2>/dev/null; then
-        "$OLLAMA_DAEMON_INSTALLER" \
-            || { warn "could not install the $OLLAMA_LABEL daemon"; return 1; }
-        log "  ollama serving from the $OLLAMA_LABEL LaunchDaemon"
-    else
-        manual "Install the ollama LaunchDaemon on $HOST (needs sudo):
-      $OLLAMA_DAEMON_INSTALLER"
-    fi
-
-    # Only warn on the hosts that actually bind the wildcard — tiptree's plist
-    # sets no OLLAMA_HOST and stays on localhost, where none of this applies.
-    grep -q '<key>OLLAMA_HOST</key><string>0\.0\.0\.0</string>' "$OLLAMA_DAEMON_PLIST" || return 0
-
-    manual "SECURITY, when convenient: ollama on $HOST listens on 0.0.0.0 with NO
-      authentication of any kind. Anything that can reach :11434 — every device
-      on the LAN, including guest wifi and IoT — can list, run, pull and delete
-      models. Two changes, and BOTH are needed because either alone achieves
-      nothing:
-        1. Bind the tailnet IP instead of the wildcard, by setting OLLAMA_HOST
-           to \"\$(tailscale ip -4)\" in $OLLAMA_DAEMON_PLIST and re-running
-           $OLLAMA_DAEMON_INSTALLER. On the wildcard, LAN traffic reaches ollama
-           without passing through Tailscale at all, so no ACL can see it.
-        2. Add a Tailscale ACL restricting dst $HOST:11434 to the nodes that
-           need it, AND narrow the catch-all src/dst rule most tailnets ship
-           with — ACLs are additive allow-lists, so a new narrow rule restricts
-           nothing while a permissive one remains.
-      Note OLLAMA_ORIGINS is not the answer: it reads like a host allowlist but
-      only filters the browser CORS Origin header, so any client that sends no
-      Origin header — curl, msgvault, every API caller — is unaffected."
-}
-
-# --- tiptree: the OpenClaw workspace as an Obsidian vault ------------------
-#
-# Sheldon's OpenClaw workspace is mirrored into Obsidian Sync as the "Sheldon"
-# vault, so the agent's working files are readable and reviewable from any
-# machine running Obsidian. tiptree gets obsidian-headless rather than the
-# desktop cask: nobody sits at this box, it only needs to move files.
-#
-# `ob login` is interactive (email, password, MFA), so it cannot run here.
-# Bootstrap detects the session and instructs instead of prompting, which keeps
-# the rest of the run unattended.
-
-OB_VAULT="Sheldon"
-OB_WORKSPACE="$HOME/.openclaw/workspace"
-OB_LABEL="md.obsidian.headless-sync"
-# The mise SHIM, deliberately — not the versioned install path that `npm -g`
-# reports. node is declared as `latest` in the tracked mise config, so
-# .../installs/node/<version>/bin/ob moves the next time that resolves to a
-# new release, leaving the LaunchAgent pointed at a path that no longer
-# exists. The shim survives version bumps.
-OB_BIN="$HOME/.local/share/mise/shims/ob"
-
-tiptree_obsidian_sync_agent() {
-    # WorkingDirectory is load-bearing: `ob sync` resolves which vault it is
-    # operating on from the directory it starts in. KeepAlive because unlike
-    # the ollama agent this one is a one-shot that must not exit — `--continuous`
-    # runs forever, so a crash should bring it straight back.
-    _launch_agent "$OB_LABEL" \
-        "    <key>WorkingDirectory</key>  <string>${OB_WORKSPACE}</string>
-    <key>KeepAlive</key>         <true/>" \
-        "$OB_BIN" sync --continuous || return 1
-
-    log "  continuous sync running — log: ~/Library/Logs/${OB_LABEL}.log"
-    # tiptree is headless and not Sean's machine, so a silently dead sync would
-    # go unnoticed indefinitely, so the run is worth confirming by hand once.
-    manual "Confirm the Obsidian sync is actually running on tiptree — nothing
-      there will surface a failure locally:
-      launchctl print gui/\$(id -u)/${OB_LABEL} | head -20
-      tail ~/Library/Logs/${OB_LABEL}.err"
-}
-
-tiptree_obsidian_headless() {
-    [ -d "$OB_WORKSPACE" ] || {
-        warn "$OB_WORKSPACE not found; install OpenClaw first, then re-run"
-        return 1
-    }
-    command_exists npm || { warn "npm is missing; cannot install obsidian-headless"; return 1; }
-
-    if ! command_exists ob; then
-        log "Installing obsidian-headless (requires node >= 22)"
-        npm install -g obsidian-headless
-        # common_mise already reshimmed, but that was before this install —
-        # without a second pass there is no shim for OB_BIN to point at.
-        mise reshim
-    fi
-
-    # Cheapest authenticated call available; failure means no stored session.
-    if ! ob sync-list-remote >/dev/null 2>&1; then
-        warn "obsidian-headless is not logged in — vault sync is NOT configured."
-        manual "Log in to Obsidian Sync on $HOST, then re-run bootstrap to finish
-      linking the '$OB_VAULT' vault:
-      ob login
-      (interactive: email, password, and 2FA if enabled)"
-        return 1
-    fi
-
-    if ! ob sync-list-remote 2>/dev/null | grep -q "$OB_VAULT"; then
-        log "Creating the remote vault '$OB_VAULT'"
-        ob sync-create-remote --name "$OB_VAULT"
-    fi
-
-    # Ask ob whether this folder is linked rather than inferring it from a
-    # .obsidian directory. That inference was wrong on the first real run:
-    # tiptree's workspace had an EMPTY .obsidian, so the guard skipped
-    # sync-setup, and the agent would have been installed against an unlinked
-    # folder — syncing nothing, reporting success. A directory Obsidian creates
-    # for its own reasons says nothing about Sync being configured.
-    if ob sync-status --path "$OB_WORKSPACE" >/dev/null 2>&1; then
-        log "$OB_WORKSPACE is already linked to a remote vault"
-    else
-        log "Linking $OB_WORKSPACE to the '$OB_VAULT' vault"
-        ob sync-setup --vault "$OB_VAULT" --path "$OB_WORKSPACE" \
-            || { warn "could not link $OB_WORKSPACE to '$OB_VAULT'"; return 1; }
-    fi
-
-    tiptree_obsidian_sync_agent
+        # A property of the plist, not of the machine: anything binding the
+        # wildcard is reachable from the whole LAN, guest wifi and IoT included.
+        grep -q '<string>0\.0\.0\.0</string>' "$plist" && manual \
+            "SECURITY, when convenient: $label on $HOST binds 0.0.0.0 with no
+      authentication. Two changes, and BOTH are needed because either alone
+      achieves nothing: bind the tailnet IP instead of the wildcard in
+      $plist, and add a Tailscale ACL restricting its port to the nodes that
+      need it AND narrow the catch-all rule most tailnets ship with — ACLs
+      are additive allow-lists, so a narrow rule restricts nothing while a
+      permissive one remains."
+    done
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -1203,11 +996,12 @@ case "$OS" in
     Darwin)
         macos_prereqs
         macos_formulae
+        has_role workstation && macos_fonts
+        macos_casks
         # After the casks: the wrapper reads the CLI out of Tailscale.app, which
         # does not exist until the tailscale-app cask has been installed. Called
         # any earlier it silently no-ops on exactly the fresh machine that needs
         # it, and only appears to work on re-runs.
-        [ -n "$gui" ] && { macos_fonts; macos_casks; }
         macos_tailscale_cli
         macos_1password_agent
         ;;
@@ -1226,7 +1020,7 @@ case "$OS" in
         ubuntu_docker
         # After both, so the origins it allows are ones that now exist.
         ubuntu_unattended_vendors
-        [ -n "$gui" ] && ubuntu_gui
+        has_role workstation && ubuntu_gui
         ;;
     *)
         die "unsupported OS: $OS"
@@ -1243,84 +1037,51 @@ common_msgvault
 common_ollama
 
 # ---------------------------------------------------------------------------
-# Machine one-offs
+# Roles
 # ---------------------------------------------------------------------------
 
-case "$HOST" in
-    verne)
-        # Daily driver. Everything it needs is in the common path — the arm
-        # exists so the primary machine is not reported as unrecognised.
-        log "verne: daily driver — no machine-specific setup needed"
-        ;;
-    huxley)
-        # Same shape as verne: everything it needs is in the common path, and
-        # the arm exists so the machine is not reported as unrecognised.
-        log "huxley: no machine-specific setup needed"
-        ;;
-    lem)
-        # common_ollama starts the service everywhere. What is lem-specific is
-        # serving it to the tailnet, which needs a daemon brew cannot provide.
-        ollama_daemon
-        lem_msgvault_repo_pull
-        # lem is the tailnet's second exit node. On macOS the Tailscale app
-        # does its own packet forwarding, so none of the sysctl/ethtool tuning
-        # wells needs applies here — advertising and admin-console approval
-        # are the whole job.
-        manual "lem: advertise as an exit node:
-      tailscale set --advertise-exit-node
-      (or Tailscale menu bar -> Settings -> 'Run exit node'), then approve it
-      in the admin console (Machines -> lem -> Edit route settings), or add an
-      autoApprovers rule covering it."
-        ;;
-    tiptree)
-        # Headless: nobody logs in here, so ollama needs the same system-domain
-        # daemon lem uses. Its plist is tuned smaller and stays on localhost.
-        ollama_daemon
-        manual "tiptree: install OpenClaw by hand — see README 'Machines'."
-        tiptree_obsidian_headless
-        ;;
-    wells)
-        ubuntu_exit_node_tuning
-        # One ordered pass over every sync, then the backup — replacing the
-        # separate calendar/Granola/backup entries that were sequenced only by
-        # guessed timings. 06:00 leaves the daemon-scheduled mail syncs
-        # (02/03/04, in msgvault's own config) clear ahead of it.
-        _cron_entry msgvault-nightly "0 6 * * *" "$HOME/bin/msgvault-nightly"
-        # Advertising is only half of it — traffic routes nowhere until the
-        # node is approved. If the join above already happened without the
-        # flag, `tailscale set` adds it without disturbing the session.
-        manual "Approve wells as an exit node in the Tailscale admin console
-      (Machines -> wells -> Edit route settings), or add an autoApprovers
-      rule for tag:server. If wells joined without the flag, first run:
-      sudo tailscale set --advertise-exit-node"
-        manual "wells: run the msgvault deploy sequence — see README 'Machines'."
-        ;;
-    *)
-        # Not a machine this repo knows about. The OS branch above already ran,
-        # so core (and on macOS the full cask list) is installed — only the
-        # per-machine extras are skipped.
-        #
-        # warn, not log: on a known machine this branch means the hostname was
-        # resolved wrong, and every per-machine step was skipped. That is the
-        # silent failure worth being loud about — a genuinely new box costs one
-        # line of noise, which is the right trade.
-        warn "No machine-specific setup for '$HOST' (known: verne, huxley, lem, tiptree, wells)"
-        log "  OS detected as $OS — core toolchain installed via the $OS path"
-        [ "$OS" = Darwin ] && log "  macOS: full base cask list installed (no exclusions)"
-        [ "$OS" = Linux ]  && log "  Linux: GUI apps skipped unless 'yadm config local.gui true'"
-        manual "'$HOST' has no machine-specific setup. If this IS a known box, the
-      hostname resolved wrong and its per-machine steps were all skipped —
-      check 'hostname -s'. If it is genuinely new, add a case arm for it in
-      the 'Machine one-offs' section of ~/.config/yadm/bootstrap."
-        ;;
-esac
+if has_role server; then
+    # Exit-node duty needs the kernel forwarding packets for other machines.
+    # Opt-in rather than implied by the role: turning on IP forwarding is a
+    # posture change no server should get just for being a server.
+    #   yadm config local.exit-node true
+    if [ "$(yadm config local.exit-node 2>/dev/null)" = "true" ]; then
+        [ "$OS" = Linux ] && ubuntu_exit_node_tuning
+        manual "Approve $HOST as an exit node in the Tailscale admin console
+      (Machines -> $HOST -> Edit route settings), or add an autoApprovers rule
+      covering it — advertising alone routes nothing. If it joined without the
+      flag:  sudo tailscale set --advertise-exit-node"
+    fi
+fi
+
+# The jobs a machine keeps running are tracked plists, so this needs no idea
+# which machine it is on.
+[ "$OS" = Darwin ] && macos_launch_units
+
+# ---------------------------------------------------------------------------
+# Machine one-offs
+#
+# Whatever is neither core nor a role. A tracked ##hostname.<host> alt, so a
+# machine with nothing unusual about it simply has no file and nothing here
+# runs. Sourced, not executed: it gets log/warn/manual, _cron_entry and the
+# rest of this file's helpers.
+# ---------------------------------------------------------------------------
+
+HOST_EXTRAS="$HOME/.config/yadm/host-extras"
+if [ -f "$HOST_EXTRAS" ]; then
+    log "Running host extras for $HOST"
+    # shellcheck source=/dev/null
+    . "$HOST_EXTRAS"
+fi
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
 # Queued last so they print closest to the prompt, where they will be read.
-if [ "$OS" = Darwin ]; then
+# Gated on the role, not the OS: both are about Sean's own accounts and vault,
+# which a machine nobody sits at has no business holding.
+if has_role workstation; then
     # Notes only. Granola meetings moved to msgvault on 2026-08-06 and the
     # `granola` collection was retired — do not re-add it, since a query
     # against a missing collection returns nothing rather than erroring.
@@ -1328,10 +1089,6 @@ if [ "$OS" = Darwin ]; then
       qmd collection add ~/Vaults/Main --name obsidian
       qmd update && qmd embed
       See README 'qmd — Local Note Search'."
-    # Installed by the formula list, authorized by nobody: the client secrets
-    # live in the keyring and the tokens come from a browser. Both accounts
-    # matter — a box with only Choufam has no work mail and an incomplete
-    # calendar, and looks like it works.
     manual "Authorize gog for both Google accounts — a box with only the personal
       one has no work mail and an incomplete calendar, and looks fine.
       Register both clients first, then 'gog auth add' each account. The
