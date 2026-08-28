@@ -38,6 +38,23 @@ if (( $+commands[nvim] )); then
     export VISUAL=nvim
 fi
 
+# SSH agent. Exported here for the same reason as EDITOR: the consumers are
+# scripts, cron, LaunchAgents and coding agents, none of which read ~/.zshrc.
+#
+# Git signs commits by shelling out to `ssh-keygen -Y sign`, which reads
+# SSH_AUTH_SOCK and ignores the IdentityAgent line in ~/.ssh/config — that
+# line only steers the `ssh` client. macOS pre-sets SSH_AUTH_SOCK to its own
+# launchd agent, which holds no keys, so without this a non-interactive
+# `git commit` falls through to prompting for a passphrase on a key file and
+# hangs forever with nothing attached to answer it.
+#
+# Guarded twice: on the socket existing, so machines without 1Password fall
+# back to whatever they already had, and on the current value not being a
+# forwarded agent, so `ssh -A` into this box keeps using the agent it brought.
+if [[ -S $HOME/.1password/agent.sock && $SSH_AUTH_SOCK != /tmp/ssh-* ]]; then
+    export SSH_AUTH_SOCK=$HOME/.1password/agent.sock
+fi
+
 # ---------------------------------------------------------------------------
 # Machine-specific secrets
 #
