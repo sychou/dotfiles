@@ -7,7 +7,7 @@
 - eza (better ls)
 - fd (better find)
 - gh (GitHub CLI)
-- gog (Google Workspace CLI — see `gog` skill for full reference)
+- gog (Google Workspace CLI — see `google-workspace` skill for full reference)
 - jq (JSON processor)
 - msgvault (email/meeting/calendar archive search — see `pkm` skill for routing and corpus facts)
 - poppler (pdftotext and other PDF tools)
