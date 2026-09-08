@@ -3,8 +3,8 @@
 #
 # Updates: Homebrew (formulae + casks), ollama service restart when the
 # running server version goes stale, yadm dotfiles, the agent-skills repo
-# (pulled, symlinked into ~/.agents/skills, mirrored into ~/.claude/skills),
-# Claude Code, uv tools, and mise-managed tools. Sections are independent: a failure is reported and
+# (pulled, then linked by its own install script), Claude Code, uv tools, and
+# mise-managed tools. Sections are independent: a failure is reported and
 # summarized, never fatal to the rest of the run.
 #
 # Machine-aware: ollama runs as a LaunchAgent on verne (no sudo) and as a
@@ -48,40 +48,6 @@ git_pull() { # git_pull <label> <dir>
   else
     fail "$label: pull failed"
     echo "$out" | tail -3
-  fi
-}
-
-link_skills() { # link_skills <label> <repo dir> <skills dir>
-  # The source is the truth; the skills dir holds symlinks into it, so a fresh
-  # clone — or a skill added upstream since the last run — becomes available
-  # without any manual linking. The source is a repo (skills at the root or
-  # under skills/) or another skills dir being mirrored; a directory counts as
-  # a skill when it has a SKILL.md.
-  local label="$1" repo="$2" dest="$3"
-  local src name target new=0 current=0
-  [ -d "$repo" ] || return  # git_pull already noted it is not on this machine
-  mkdir -p "$dest" 2>/dev/null || { fail "$label: cannot create $dest"; return; }
-  for src in "$repo"/*/ "$repo"/skills/*/; do
-    [ -f "${src}SKILL.md" ] || continue
-    src=${src%/}; name=${src##*/}; target="$dest/$name"
-    if [ -L "$target" ] && [ "$(readlink -f "$target")" = "$(readlink -f "$src")" ]; then
-      current=$((current + 1))
-    elif [ -e "$target" ] && [ ! -L "$target" ]; then
-      # Skills installed by their own tool (msgvault, qmd) are real
-      # directories — never clobber one with a link.
-      note "$label: $name is a real directory in $dest — left alone"
-    elif ln -sfn "$src" "$target"; then
-      new=$((new + 1))
-    else
-      fail "$label: could not link $name"
-    fi
-  done
-  if [ "$new" -gt 0 ]; then
-    ok "$label: linked $new skill(s), $current already current"
-  elif [ "$current" -gt 0 ]; then
-    ok "$label: $current skill(s) already linked"
-  else
-    note "$label: no skills found in $repo"
   fi
 }
 
@@ -146,11 +112,12 @@ fi
 
 section "Skills repos"
 git_pull "agent-skills" "$HOME/repos/agent-skills"
-# ~/.agents/skills is the Agent Skills spec location; Codex, OpenCode, and Crush
-# all read it. Claude Code reads only ~/.claude/skills, so mirror the canonical
-# directory there in a second pass (real directories such as msgvault-* survive).
-link_skills "agent-skills" "$HOME/repos/agent-skills" "$HOME/.agents/skills"
-link_skills "claude mirror" "$HOME/.agents/skills" "$HOME/.claude/skills"
+# The repo owns its own linking: its install script links each skill into
+# ~/.agents/skills, mirrors that into ~/.claude/skills, and prunes links to
+# skills that were deleted upstream. It prints its own summary line.
+if [ -x "$HOME/repos/agent-skills/install" ]; then
+  "$HOME/repos/agent-skills/install" || fail "agent-skills install"
+fi
 
 # --- Tools ----------------------------------------------------------------
 section "Claude Code"
