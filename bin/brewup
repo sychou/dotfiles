@@ -2,9 +2,9 @@
 # brewup — whole-system updater (replaces the old zshrc alias).
 #
 # Updates: Homebrew (formulae + casks), ollama service restart when the
-# running server version goes stale, yadm dotfiles, the claude-skills repo
-# (pulled, then symlinked into ~/.claude/skills), Claude Code, uv tools, and
-# mise-managed tools. Sections are independent: a failure is reported and
+# running server version goes stale, yadm dotfiles, the agent-skills repo
+# (pulled, symlinked into ~/.agents/skills, mirrored into ~/.claude/skills),
+# Claude Code, uv tools, and mise-managed tools. Sections are independent: a failure is reported and
 # summarized, never fatal to the rest of the run.
 #
 # Machine-aware: ollama runs as a LaunchAgent on verne (no sudo) and as a
@@ -52,11 +52,11 @@ git_pull() { # git_pull <label> <dir>
 }
 
 link_skills() { # link_skills <label> <repo dir> <skills dir>
-  # The repo is the source of truth; the skills dir holds symlinks into it, so
-  # a fresh clone — or a skill added upstream since the last run — becomes
-  # available without any manual linking. Skills sit either at the repo root
-  # or under a skills/ subdirectory; a directory counts as one when it has a
-  # SKILL.md.
+  # The source is the truth; the skills dir holds symlinks into it, so a fresh
+  # clone — or a skill added upstream since the last run — becomes available
+  # without any manual linking. The source is a repo (skills at the root or
+  # under skills/) or another skills dir being mirrored; a directory counts as
+  # a skill when it has a SKILL.md.
   local label="$1" repo="$2" dest="$3"
   local src name target new=0 current=0
   [ -d "$repo" ] || return  # git_pull already noted it is not on this machine
@@ -145,8 +145,12 @@ else
 fi
 
 section "Skills repos"
-git_pull "claude-skills" "$HOME/repos/claude-skills"
-link_skills "claude-skills" "$HOME/repos/claude-skills" "$HOME/.claude/skills"
+git_pull "agent-skills" "$HOME/repos/agent-skills"
+# ~/.agents/skills is the Agent Skills spec location; Codex, OpenCode, and Crush
+# all read it. Claude Code reads only ~/.claude/skills, so mirror the canonical
+# directory there in a second pass (real directories such as msgvault-* survive).
+link_skills "agent-skills" "$HOME/repos/agent-skills" "$HOME/.agents/skills"
+link_skills "claude mirror" "$HOME/.agents/skills" "$HOME/.claude/skills"
 
 # --- Tools ----------------------------------------------------------------
 section "Claude Code"
