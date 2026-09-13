@@ -140,6 +140,45 @@ prompt went unanswered. Unlock it and retry. To get one commit through without
 signing, use `git -c commit.gpgsign=false commit` — this leaves your global
 config alone, but the commit will show as unverified on GitHub.
 
+#### Headless machines
+
+The 1Password agent needs interactive approval to sign, so a machine you reach
+over SSH cannot commit or push once the app auto-locks. Give such a machine its
+own passphrase-less key and keep the wiring in two **untracked** per-machine
+files (same contract as `~/.zshenv.local`):
+
+```sh
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_$(hostname -s)_github
+gh ssh-key add ~/.ssh/id_$(hostname -s)_github.pub --title "$(hostname -s)" --type authentication
+gh ssh-key add ~/.ssh/id_$(hostname -s)_github.pub --title "$(hostname -s) signing" --type signing
+```
+
+`~/.ssh/config.local` (included first, so it wins):
+
+```
+Host github.com
+    IdentityFile ~/.ssh/id_<host>_github
+    IdentitiesOnly yes
+    IdentityAgent none
+```
+
+`~/.config/git/local` (the last include in `.gitconfig`, so it overrides the
+platform file). A private-key *path* makes `ssh-keygen -Y sign` read the file
+directly, with no agent involved:
+
+```ini
+[user]
+	signingkey = /Users/<you>/.ssh/id_<host>_github
+[gpg "ssh"]
+	program = ssh-keygen
+```
+
+Then append the public key to the tracked `~/.ssh/allowed_signers` so every
+machine can verify the commits, and prove it with
+`env -u SSH_AUTH_SOCK git commit --allow-empty -m probe && git log -1 --show-signature`.
+A machine that never pushes (deploy-key boxes) should instead put
+`[commit] gpgsign = false` in its `git/local`.
+
 ### Configuration
 
 - Start 1Password and login
@@ -162,7 +201,9 @@ config alone, but the commit will show as unverified on GitHub.
 - SSH keys and the commit-signing key come from 1Password's SSH agent (see
   "GitHub & Commit Signing" above). `~/.ssh/config` **is** tracked and points
   `IdentityAgent` at the 1Password agent socket, so terminal SSH routes through
-  1Password automatically once the agent is enabled — no manual step needed
+  1Password automatically once the agent is enabled — no manual step needed.
+  On a machine you will reach over SSH, use the per-machine key pattern under
+  "Headless machines" instead
 - Restore any other `~/.ssh` files / secrets not held in 1Password
 
 ## Setting Up an Ubuntu Box
