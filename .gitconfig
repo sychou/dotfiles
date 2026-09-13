@@ -18,4 +18,5 @@
 # Platform-specific paths (gh, op-ssh-sign) live here so this file stays
 # portable. yadm links the right variant — see .config/git/platform##os.*
 [include]
-	path = ~/.config/git/platform
+      path = ~/.config/git/platform
+      path = ~/.config/git/local
