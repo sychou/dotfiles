@@ -7,7 +7,7 @@
 # `typeset -U path PATH` first.
 #
 # Full explanation — the startup sequence, why twice, and what is deliberately
-# kept out of this file — lives in the "zsh" section of the vault note "How to Set Up a New Mac".
+# kept out of this file — lives in the "zsh" section of the vault note "How to Set Up a New Machine".
 #
 # Entries are PREPENDED, so this list reads LOWEST priority first: add at the
 # bottom for high priority, at the top for low.

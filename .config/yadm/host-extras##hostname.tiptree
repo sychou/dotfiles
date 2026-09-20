@@ -7,7 +7,7 @@
 #
 # log/warn/manual and the rest of bootstrap's helpers are in scope here.
 
-manual "tiptree: install OpenClaw by hand — see the vault note 'How to Set Up a New Mac'."
+manual "tiptree: install OpenClaw by hand — see the vault note 'How to Set Up a New Machine'."
 
 # The sync agent cannot be a tracked plist like every other launchd job here:
 # it must not be loaded until `ob` is logged in and the workspace is linked, and
