@@ -91,8 +91,8 @@ On macOS these come from Homebrew; on Ubuntu the same tools come from several
 places, listed under [Ubuntu package sources](#ubuntu-package-sources).
 
 Not installed on Ubuntu: `lazygit`, `supabase` and `vercel` (Mac-only by
-choice), plus `ffmpeg`, `lf`, `mlx` and `poppler` (Mac-only in practice; `mlx`
-is Apple-silicon).
+choice), plus `ffmpeg`, `lf`, `mlx`, `mole` and `poppler` (Mac-only in practice; `mlx`
+is Apple-silicon and `mole` is a macOS cleanup app).
 
 - bat, better cat
 - eza, better ls
@@ -111,6 +111,7 @@ is Apple-silicon).
 - lua, scripting language
 - mise, runtime version manager
 - mlx, Apple ML framework
+- mole, Mac cleanup and optimisation
 - mosh, better ssh
 - mosquitto, MQTT broker and clients
 - msgvault, email, meeting and calendar archive client

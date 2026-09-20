@@ -214,6 +214,7 @@ macos_formulae() {
         lua \
         mise \
         mlx \
+        mole \
         mosh \
         mosquitto \
         msgvault \
