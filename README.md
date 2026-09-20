@@ -90,16 +90,14 @@ sits at gets GUI apps and fonts, a **server** runs services unattended, and an
 On macOS these come from Homebrew; on Ubuntu the same tools come from several
 places, listed under [Ubuntu package sources](#ubuntu-package-sources).
 
-Not installed on Ubuntu: `lazygit`, `flyctl`, `supabase` and `vercel` (Mac-only
-by choice), plus `ffmpeg`, `lf`, `mlx`, `mole`, `poppler` and `temporal`
-(Mac-only in practice; `mlx` is Apple-silicon and `mole` is a macOS cleanup
-app).
+Not installed on Ubuntu: `lazygit`, `supabase` and `vercel` (Mac-only by
+choice), plus `ffmpeg`, `lf`, `mlx` and `poppler` (Mac-only in practice; `mlx`
+is Apple-silicon).
 
 - bat, better cat
 - eza, better ls
 - fd, better find
 - ffmpeg, audio/video transcoding
-- flyctl, Fly.io CLI
 - fzf, fuzzy finder
 - gdu, disk usage
 - gh, GitHub CLI
@@ -113,7 +111,6 @@ app).
 - lua, scripting language
 - mise, runtime version manager
 - mlx, Apple ML framework
-- mole, port forwarding / tunnels
 - mosh, better ssh
 - mosquitto, MQTT broker and clients
 - msgvault, email, meeting and calendar archive client
@@ -127,7 +124,6 @@ app).
 - ripgrep, better grep
 - starship, better prompt
 - supabase, Supabase CLI (local stack runs in Docker Desktop)
-- temporal, workflow engine
 - tmux, terminal multiplexer
 - trash, safe rm (sends to macOS Trash)
 - tree, directory listing
@@ -174,12 +170,12 @@ Visual Studio Code
 
 Workstations only:
 
-Bambu Studio, Boop, ChatGPT, Claude, CleanShot, Discord, Granola, HandBrake,
-Logi Options+, Microsoft Teams, MonitorControl, Obsidian, Signal, Slack,
-Spotify, Telegram, Trezor Suite, VLC, Webex, WhatsApp, Wispr Flow, Zoom
+Boop, ChatGPT, Claude, CleanShot, Discord, Granola, HandBrake, Microsoft
+Teams, Obsidian, Signal, Slack, Spotify, Telegram, VLC, Webex, WhatsApp, Wispr
+Flow, Zoom
 
-A machine opts out of individual casks by name with
-`yadm config local.cask-exclude <cask>`.
+Apps tied to a particular piece of hardware, and CLIs tied to a particular
+project, are installed by hand where they are needed rather than listed here.
 
 ### Mac App Store only
 

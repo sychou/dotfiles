@@ -201,7 +201,6 @@ macos_formulae() {
         eza \
         fd \
         ffmpeg \
-        flyctl \
         fzf \
         gdu \
         gh \
@@ -215,7 +214,6 @@ macos_formulae() {
         lua \
         mise \
         mlx \
-        mole \
         mosh \
         mosquitto \
         msgvault \
@@ -229,7 +227,6 @@ macos_formulae() {
         ripgrep \
         starship \
         supabase \
-        temporal \
         tmux \
         trash \
         tree \
@@ -256,31 +253,20 @@ CASKS_CORE=(
     tailscale-app visual-studio-code
 )
 
-# Apps that only mean anything to someone sitting at the machine.
+# Apps that only mean anything to someone sitting at the machine. Apps tied to
+# a piece of hardware (wallet, printer, mouse, monitor) are not here: they are
+# installed by hand where the hardware is, and the vault note lists them.
 CASKS_WORKSTATION=(
-    bambu-studio boop chatgpt claude cleanshot discord granola handbrake-app
-    logi-options+ microsoft-teams monitorcontrol obsidian signal slack spotify
-    telegram trezor-suite vlc webex whatsapp wispr-flow zoom
+    boop chatgpt claude cleanshot discord granola handbrake-app microsoft-teams
+    obsidian signal slack spotify telegram vlc webex whatsapp wispr-flow zoom
 )
 
-# A machine opts out of individual casks by name, as data rather than an arm
-# in here:  yadm config local.cask-exclude "trezor-suite"
 macos_casks() {
-    local want=("${CASKS_CORE[@]}") keep=() c x skip
+    local want=("${CASKS_CORE[@]}")
     [ -n "$WORKSTATION" ] && want+=("${CASKS_WORKSTATION[@]}")
 
-    local exclude; exclude=$(yadm config local.cask-exclude 2>/dev/null | tr ',' ' ' || true)
-
-    for c in "${want[@]}"; do
-        skip=""
-        for x in $exclude; do
-            [ "$c" = "$x" ] && { skip=1; break; }
-        done
-        [ -z "$skip" ] && keep+=("$c")
-    done
-
-    log "Installing GUI apps (${#keep[@]} casks)"
-    brew install --cask "${keep[@]}"
+    log "Installing GUI apps (${#want[@]} casks)"
+    brew install --cask "${want[@]}"
 
     [ -n "$WORKSTATION" ] && manual "Install the App Store-only apps: NextDNS,
       Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
