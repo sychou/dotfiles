@@ -299,7 +299,7 @@ macos_1password_agent() {
     mkdir -p "$HOME/.1password"
     ln -sfn "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" \
         "$HOME/.1password/agent.sock"
-    [ -f "$HOME/.ssh/github.pub" ] || manual "Sign in to 1Password, turn on the SSH agent
+    [ -s "$HOME/.ssh/github.pub" ] || manual "Sign in to 1Password, turn on the SSH agent
       (Settings -> Developer), then write ~/.ssh/github.pub from it:
         ssh-add -L | grep -w 'github\$' > ~/.ssh/github.pub
       Until then ssh to GitHub fails with 'Permission denied (publickey)'."
