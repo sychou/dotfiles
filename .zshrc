@@ -114,6 +114,9 @@ alias grep='grep --color=auto'
 # --- Completions ---
 # Full compinit (with security audit) at most once a day; -C otherwise.
 
+# Docker Desktop ships its CLI completions here; add to fpath before compinit.
+[ -d "$HOME/.docker/completions" ] && fpath=("$HOME/.docker/completions" $fpath)
+
 autoload -Uz compinit
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
     compinit

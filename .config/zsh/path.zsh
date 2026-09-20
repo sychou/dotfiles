@@ -12,6 +12,9 @@
 # Entries are PREPENDED, so this list reads LOWEST priority first: add at the
 # bottom for high priority, at the top for low.
 
+# Docker Desktop's CLI plugins (compose, buildx, ...). Lowest priority.
+[ -d "$HOME/.docker/bin" ] && PATH="$HOME/.docker/bin:$PATH"
+
 # mise shims: node/go/python for the shells that never run `mise activate`
 # (that hook lives in ~/.zshrc, interactive-only). Scripts, cron, agents, and
 # anything they launch — nvim's Mason, notably — resolve runtimes through
