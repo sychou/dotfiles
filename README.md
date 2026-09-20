@@ -1,261 +1,8 @@
 # Dotfiles
 
-These dotfiles are managed by [yadm](https://yadm.io/).
-
-## What varies between machines
-
-Every machine gets the **same tracked configs and the same core CLI toolchain**.
-Bootstrap is run by hand, so it simply asks what else this one needs:
-
-```text
-  Setting up <host>. Core CLI tools and tracked configs install either way.
-
-  Install GUI apps, fonts and desktop tooling? [Y/n]
-  Set this machine up to run services unattended? [y/N]
-  Is this the msgvault archive server? [y/N]
-  Advertise it as a Tailscale exit node? [y/N]
-```
-
-The answers are independent — a workstation that also serves ollama to the
-tailnet says yes to the first two. The GUI question defaults to yes on macOS and
-no on Linux; the rest default to no.
-
-Two of them are not quite independent. **msgvault implies unattended services**,
-because the archive has to keep running whether or not anyone is logged in — say
-yes to it having said no to the one above and the bootstrap turns that on and
-says so. And the **exit-node question is only asked** of a machine that is
-running services at all.
-
-Saying yes to msgvault schedules the nightly sync-then-backup pass at 06:00 and
-queues the deploy sequence as a manual step. Only one machine is the archive
-server; every other one runs the client — see [Machines](#machines).
-
-Nothing is remembered between runs, and the roles are not keyed on the hostname,
-so there is no per-machine state to get stale or wrong. Re-running the bootstrap
-means answering the questions again.
-
-One switch is data rather than a question, because it is a standing property of
-a machine rather than something to decide each time:
-
-```sh
-yadm config local.cask-exclude trezor-suite   # opt out of individual casks
-```
-
-### Per-machine work is data, not branches
-
-yadm already selects files by hostname, so anything genuinely specific to one
-machine is a `##hostname.<host>` alt rather than an arm in the bootstrap:
-
-- `~/.config/launchd/<label>.plist` — a LaunchDaemon. Copied into
-  `/Library/LaunchDaemons` and loaded in the system domain, for jobs that must
-  run with nobody logged in.
-- `~/Library/LaunchAgents/<label>.plist` — a LaunchAgent. yadm materialises it
-  straight at the load path, so the bootstrap only loads it.
-- `~/.config/yadm/host-extras` — a shell fragment, sourced if present, for the
-  one-offs that belong to one machine only. It gets `log`, `warn`, `manual`,
-  `_cron_entry` and the rest of the bootstrap's helpers.
-
-Only yadm-tracked plists are loaded, so Homebrew's own agents and anything
-installed by hand are left alone. Adding a machine means answering the questions
-and, if it needs them, adding alts — not editing the bootstrap.
-
-> **The bootstrap never uninstalls.** Roles and exclusions control what gets
-> *installed*, not what gets removed. A machine that already has extra apps keeps
-> them until you `brew uninstall --cask` them yourself.
-
-## Machines
-
-Which machine does what is recorded in two places, and this README is neither.
-The **roles** are the bootstrap answers, given fresh each run. The **jobs** are
-the `##hostname.<host>` alts above: which plists and host-extras exist is the
-record of which box runs which service. Everything else about a specific
-machine — its hardware, what it is for, what to check when it misbehaves — lives
-in private notes, because this repo is public. Where the bootstrap says "see
-README 'Machines'", it means those notes.
-
-Adding a machine:
-
-1. Pick a hostname and set it before cloning (below), since the alts key on it.
-2. Run the bootstrap and answer the role questions.
-3. If it serves something, add the alts. An ollama host that must keep running
-   with nobody logged in gets `~/.config/launchd/local.ollama.plist##hostname.<host>`,
-   a LaunchDaemon that binds `OLLAMA_HOST=0.0.0.0` so the tailnet can reach it;
-   the bootstrap sees it and leaves Homebrew's own ollama agent alone. A
-   scheduled job gets a LaunchAgent alt. One-offs go in a `host-extras` alt.
-4. Write the machine's note.
-
-Two client configs are copied by hand from a machine that already has them,
-because each carries a credential:
-
-- `~/.msgvault/config.toml` — points `[remote]` at the archive server and holds
-  its API key. Without it there is no email and no meeting history to search.
-- `~/.zshenv.local` — see [Secrets](#secrets).
-
-## Setting Up a New Mac
-
-Install NextDNS from the App Store and sign in, so filtering is on before
-anything else phones home.
-
-You need a terminal before you have Homebrew. Either use the built-in
-Terminal.app for the next few steps, or download Ghostty from
-<https://ghostty.org/> and start it.
-
-> If you install Ghostty by hand, adopt it into Homebrew afterwards rather than
-> letting the bootstrap install a second copy:
-> `brew install --cask --adopt ghostty`. The bootstrap lists `ghostty` as a
-> cask, so without `--adopt` you end up with an unmanaged app that brew will
-> never update.
-
-Install Homebrew, then add it to the current shell's `PATH` (the installer does
-**not** do this for you on Apple Silicon — without it the next steps can't find
-`brew`).
-
-```sh
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/opt/homebrew/bin/brew shellenv)"
-```
-
-Install yadm.
-
-```sh
-brew install yadm
-```
-
-Clone my dotfiles repo and run the bootstrap. The repo is public, so cloning
-needs no authentication.
-
-```sh
-yadm clone https://github.com/sychou/dotfiles
-```
-
-The bootstrap script handles everything else: Homebrew packages, cask apps,
-fonts, mise runtimes, Python tools, and Claude Code. (The
-bootstrap itself re-runs the brew `shellenv` step internally, so it works even
-on a fresh machine.)
-
-yadm selects per-machine files by `hostname -s`, so **set the hostname before
-running it** — otherwise none of this machine's alts are materialised:
-
-```sh
-sudo scutil --set LocalHostName <hostname>
-```
-
-Two things about Claude Code that the bootstrap cannot finish. `~/.claude/CLAUDE.md`
-is tracked, but its first line imports `~/.config/AGENTS.md`, a symlink that a
-separate skills repo's install script creates; until that repo is cloned and
-installed, Claude Code runs without the shared instructions. And
-`~/.claude/settings.json` is per-machine and not tracked.
-
-### GitHub & Commit Signing
-
-Cloning is public, but **pushing changes back requires authenticating as
-`sychou`** and commits are SSH-signed via 1Password. Set this up before making
-edits:
-
-1. Start 1Password, sign in, and enable the SSH agent:
-   **Settings → Developer → "Use the SSH agent"**. This is what serves both your
-   SSH auth keys and the commit-signing key (`gpg.format = ssh`,
-   `op-ssh-sign`). It's a per-machine toggle and is **not** restored by yadm.
-2. Authenticate GitHub as `sychou` (not any other account) and wire it into git:
-
-   ```sh
-   gh auth login --hostname github.com --git-protocol https --web
-   gh auth setup-git
-   ```
-
-3. Confirm the signing key is reachable: `ssh-add -l` should list your key, and a
-   test commit should show `Good "git" signature`. If signing fails with
-   "No SSH private key found", the key isn't in your 1Password Personal/Private
-   vault or the agent is off.
-
-If a commit dies with `1Password: failed to fill whole buffer` /
-`fatal: failed to write commit object`, 1Password is locked or the integration
-prompt went unanswered. Unlock it and retry. To get one commit through without
-signing, use `git -c commit.gpgsign=false commit` — this leaves your global
-config alone, but the commit will show as unverified on GitHub.
-
-#### Headless machines
-
-The 1Password agent needs interactive approval to sign, so a machine you reach
-over SSH cannot commit or push once the app auto-locks. Give such a machine its
-own passphrase-less key and keep the wiring in two **untracked** per-machine
-files (same contract as `~/.zshenv.local`):
-
-```sh
-ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_$(hostname -s)_github
-gh ssh-key add ~/.ssh/id_$(hostname -s)_github.pub --title "$(hostname -s)" --type authentication
-gh ssh-key add ~/.ssh/id_$(hostname -s)_github.pub --title "$(hostname -s) signing" --type signing
-```
-
-`~/.ssh/config.local` (included first, so it wins):
-
-```
-Host github.com
-    IdentityFile ~/.ssh/id_<host>_github
-    IdentitiesOnly yes
-    IdentityAgent none
-```
-
-`~/.config/git/local` (the last include in `.gitconfig`, so it overrides the
-platform file). A private-key *path* makes `ssh-keygen -Y sign` read the file
-directly, with no agent involved:
-
-```ini
-[user]
-	signingkey = /Users/<you>/.ssh/id_<host>_github
-[gpg "ssh"]
-	program = ssh-keygen
-```
-
-Then append the public key to the tracked `~/.ssh/allowed_signers` so every
-machine can verify the commits, and prove it with
-`env -u SSH_AUTH_SOCK git commit --allow-empty -m probe && git log -1 --show-signature`.
-A machine that never pushes (deploy-key boxes) should instead put
-`[commit] gpgsign = false` in its `git/local`.
-
-### Configuration
-
-- Start 1Password, sign in, and enable the SSH agent (above)
-- Start Chrome: make it the default browser, turn on sync, set the search engine
-- Start Obsidian, sign in to Sync, and place the vaults under `~/Vaults` (it
-  creates a subdirectory per vault)
-- Index notes in qmd (see [qmd — Local Note Search](#qmd--local-note-search))
-- Authorize gog for each Google account (see [gog — Google Workspace CLI](#gog--google-workspace-cli))
-- Copy `~/.msgvault/config.toml` from another machine (see [Machines](#machines))
-- Clone the skills repo and run its install, so `~/.config/AGENTS.md` exists
-- Pull any local models you rely on — these are machine-specific and the
-  bootstrap deliberately does not install them:
-  `ollama pull nomic-embed-text` (embeddings), plus whatever chat model fits.
-  A machine too small for the models it wants instead exports `OLLAMA_HOST`
-  in `~/.zshenv.local`, pointed at a bigger box on the tailnet
-- System Settings: hide the Dock, add Internet Accounts, enable
-  iCloud Drive > Desktop & Documents Folders
-- SSH keys and the commit-signing key come from 1Password's SSH agent (see
-  "GitHub & Commit Signing" above). `~/.ssh/config` **is** tracked and points
-  `IdentityAgent` at the 1Password agent socket, so terminal SSH routes through
-  1Password automatically once the agent is enabled — no manual step needed.
-  On a machine you will reach over SSH, use the per-machine key pattern under
-  "Headless machines" instead
-- Restore any other `~/.ssh` files / secrets not held in 1Password
-
-## Setting Up an Ubuntu Box
-
-Same repo, same bootstrap. `yadm` is in apt, so:
-
-```sh
-sudo apt update && sudo apt install -y yadm
-yadm clone https://github.com/sychou/dotfiles
-~/.config/yadm/bootstrap
-```
-
-The bootstrap detects Linux and takes the apt path instead of Homebrew. See
-[Ubuntu package sources](#ubuntu-package-sources) for what comes from where.
-
-### Either platform: secrets first
-
-**Before the first shell will work on any machine**, create `~/.zshenv.local`
-with that machine's secrets — see [Secrets](#secrets) below. Without it every
-new shell fails loudly, by design.
+These dotfiles are managed by [yadm](https://yadm.io/). This README is an
+inventory: which files are tracked, and what the bootstrap installs on which
+kind of machine. It does not describe how to set a machine up.
 
 ## Tracked Files
 
@@ -266,156 +13,87 @@ from here:
 yadm list -a
 ```
 
-Roughly: shell startup (`.zshenv`, `.zprofile`, `.zshrc`, `.config/zsh/path.zsh`),
-git and ssh config, editor config (vim, neovim, zed), terminal and TUI config
-(ghostty, tmux, lf, visidata, sqlite, readline), the Claude instructions file,
-this README, the bootstrap, and the helper scripts in `bin/`.
+Some entries carry a `##` suffix, such as `platform##os.Darwin` or
+`plist##hostname.<host>`. That is yadm's alternate-file mechanism: it checks out
+the variant matching the current OS or hostname and ignores the rest, which is
+how one repo holds per-platform and per-machine versions of the same file.
 
-Some entries carry a `##` suffix — `path##os.Darwin`, `plist##hostname.<host>`.
-That is yadm's alternate-file mechanism: it checks out the variant matching the
-current OS or hostname and ignores the rest, which is how one repo holds
-per-platform and per-machine versions of the same file.
+### Shell
 
-**Not tracked, by design:** `~/.zshenv.local` (secrets), `~/.ssh/config.local`
-and `~/.config/git/local` (per-machine key selection), `~/.msgvault/config.toml`
-(archive API key), and `~/.claude/settings.json` (Claude Code's own preferences).
-All are machine-specific and stay out of the repo; see [Secrets](#secrets).
+- `.zshenv`, runs for every zsh; PATH, `EDITOR`, and the machine-local secrets file
+- `.zprofile`, login shells; Homebrew `shellenv` and the PATH reorder after `path_helper`
+- `.zshrc`, interactive shells; prompt, aliases, functions, vi-mode bindings, completions, history, mise
+- `.config/zsh/path.zsh`, the single definition of `PATH`, sourced by both of the above
+- `.inputrc`, readline: vi editing mode, case-insensitive completion
 
-## zsh
+### Git and GitHub
 
-Four files, and which one runs depends on whether the shell is
-a *login* shell, an *interactive* shell, both, or neither.
+- `.gitconfig`, with per-platform includes
+- `.config/git/platform##os.Darwin` and `##os.Linux`, the platform halves (signing program, credential helper)
+- `.config/git/ignore`, the global ignore list
+- `.config/gh/config.yml`, GitHub CLI defaults
+- `.ssh/config`, host blocks and the agent socket
+- `.ssh/allowed_signers`, public keys that verify signed commits
 
-| File | Runs for | Holds |
-| ---- | -------- | ----- |
-| `.zshenv` | **every** zsh, no exceptions | `typeset -U path`, sources `path.zsh`, `EDITOR`, sources secrets from `~/.zshenv.local` |
-| `.config/zsh/path.zsh` | not run directly — sourced by `.zshenv` and `.zprofile` | the single definition of `PATH` |
-| `.zprofile` | login shells only | re-sources `path.zsh`, runs Homebrew `shellenv` |
-| `.zshrc` | interactive shells only | prompt, aliases, functions, vi-mode key bindings, completions, history, `mise activate` |
+### Editors
 
-### Startup sequence on macOS
+- `.vimrc` and `.vim/colors/nord.vim`, keeps vim usable where neovim is absent
+- `.config/nvim/init.lua`, `lua/plugins/which-key.lua`, `.luarc.json`, a standalone lazy.nvim config: catppuccin, lualine, gitsigns, telescope, treesitter, rainbow_csv, which-key, plus gruvbox, nord, and tokyonight themes switched with `:Theme <name>`
+- `.config/zed/settings.json` and `keymap.json`
 
-Files run top to bottom. A shell only runs the rows whose "runs for" column
-matches it. Note that the `/etc/*` system files are interleaved with your own,
-which is where the surprise below comes from.
+### Terminal and TUIs
 
-| # | File | Runs for | Notes |
-| - | ---- | -------- | ----- |
-| 1 | `/etc/zshenv` | every zsh, no exceptions | usually absent |
-| 2 | `~/.zshenv` | every zsh, no exceptions | **sources `path.zsh`** |
-| 3 | `/etc/zprofile` | login shells only | **runs `path_helper`** |
-| 4 | `~/.zprofile` | login shells only | **sources `path.zsh`** |
-| 5 | `/etc/zshrc` | interactive shells only | |
-| 6 | `~/.zshrc` | interactive shells only | aliases, prompt, mise |
-| 7 | `/etc/zlogin` | login shells only | |
-| 8 | `~/.zlogin` | login shells only | not used here |
+- `.config/ghostty/config`, FiraCode Nerd Font, `ctrl+space` quick terminal, shift+enter newline
+- `.tmux.conf`, prefix `ctrl-a`, status bar on top, no plugin manager
+- `.config/lf/lfrc` and `previewer.sh`, file manager with `g<key>` directory jumps
+- `.config/yazi/keymap.toml`, the same jump family for yazi, plus `M<key>` moves
+- `.visidatarc`, `.sqliterc`, `.nethackrc`
 
-On exit: `~/.zlogout`, then `/etc/zlogout` (login shells only).
+### Tools
 
-What counts as what:
+- `.config/mise/config.toml`, runtime versions and the npm-backed tools
+- `.config/qmd/index.yml`, the note-search collections
+- `.config/gumshoe/config.toml`, sources for the gumshoe vault
+- `.claude/CLAUDE.md`, Claude Code's user instructions; imports a shared body from a separate repo
 
-| Invocation | Kind | Runs |
-| ---------- | ---- | ---- |
-| Terminal tab/window | login + interactive | 1,2,3,4,5,6,7,8 |
-| `zsh` typed at a prompt | interactive | 1,2,5,6 |
-| `./script.zsh`, cron, LaunchAgent, `ssh host cmd`, coding agents (Claude Code) | neither | **1,2 only** |
+### yadm
 
-That last row is the one that matters. `~/.zshenv` is the only file of your own
-that automation ever runs.
+- `.config/yadm/bootstrap`, the installer, macOS and Ubuntu
+- `.config/yadm/host-extras##hostname.<host>`, one-off setup for a single machine, sourced by the bootstrap if present
 
-### Why `path.zsh` is sourced twice
+### Per-machine services
 
-Two different questions have two different right answers:
+- `.config/launchd/<label>.plist##hostname.<host>`, LaunchDaemons the bootstrap copies into `/Library/LaunchDaemons`
+- `Library/LaunchAgents/<label>.plist##hostname.<host>`, LaunchAgents yadm materialises at the load path
 
-**"Is this directory on `PATH` at all?"** Only `~/.zshenv` (step 2) reaches
-scripts, cron, LaunchAgents and agents — `~/.zprofile` never runs for them. Miss
-this and `uv`-installed tools in `~/.local/bin` are invisible to any automation
-while working fine when you test by hand. Ask me how I know.
+### Scripts in `bin/`
 
-**"In what order?"** Only `~/.zprofile` (step 4) runs *after* `path_helper`. At
-step 3 macOS rebuilds `PATH` from `/etc/paths` and `/etc/paths.d`, putting system
-directories first and appending whatever you had set. So anything step 2 puts up
-front gets demoted. Measured, with only `.zshenv` setting it:
+- `brewup`, whole-system updater: Homebrew, ollama, yadm, the skills repo, mise, uv
+- `copy`, stdin to the clipboard on macOS, Wayland, or X11
+- `fzf-preview.sh`, file and image preview for fzf
+- `gumshoe`, pulls newsletters and YouTube transcripts into the gumshoe vault
+- `health-check`, machine health probe that pings Healthchecks.io
+- `install-launch-daemon.sh`, installs a tracked LaunchDaemon plist
+- `jaunt`, rotates Tailscale exit nodes per namespace with cooldowns
+- `msgvault-nightly`, one ordered pass over every msgvault sync, then a backup
+- `report-mqtt`, publishes a job result to the MQTT broker
 
-```
- 1  /usr/local/bin
- 3  /usr/bin
-11  /opt/homebrew/bin     <- demoted, so Apple git beats Homebrew git
-```
+## What the Bootstrap Installs
 
-Sourcing at step 2 answers the first question, at step 4 the second.
+Every machine gets the same tracked configs and the same core CLI toolchain.
+Beyond that the bootstrap asks what the machine is: a **workstation** someone
+sits at gets GUI apps and fonts, a **server** runs services unattended, and an
+**exit node** forwards traffic for the tailnet. The bootstrap never uninstalls.
 
-The second pass is a **reorder, not a duplication**, because `~/.zshenv` sets
-`typeset -U path PATH` before sourcing. With the unique flag set, prepending an
-entry that already exists promotes it to the front:
+### CLI tools, every machine
 
-```
-before: /usr/bin:/bin:/opt/homebrew/bin
-after : /opt/homebrew/bin:/usr/bin:/bin
-```
+On macOS these come from Homebrew; on Ubuntu the same tools come from several
+places, listed under [Ubuntu package sources](#ubuntu-package-sources).
 
-### Editing `path.zsh`
-
-Entries are prepended, so the list reads **lowest priority first** and the final
-`PATH` comes out in reverse of the order in the file. Add new entries at the
-bottom for high priority, at the top for low.
-
-Deliberately **not** in `path.zsh`:
-
-- **`brew shellenv`** — stays in `~/.zprofile`. It forks a subprocess and also
-  sets `MANPATH`/`INFOPATH`/`HOMEBREW_PREFIX`; worth it once per login, not on
-  every `zsh -c`. The bare `bin`/`sbin` entries are all a script actually needs.
-- **`mise activate`** — stays in `~/.zshrc`. Moving it would slow every shell. If
-  cron ever needs mise tools, add the shim directory to `path.zsh` instead.
-
-Because mise's shims are prepended in `.zshrc`, mise-managed runtimes win over
-Homebrew ones. That is why `node` resolves to mise's copy even though Homebrew
-also has one installed as an `opencode` dependency.
-
-Installers like to append to these files. Docker Desktop adds a `PATH` block to
-`~/.zprofile` and a completions block to `~/.zshrc`; both are already covered
-(`~/.docker/bin` in `path.zsh`, `~/.docker/completions` on `fpath` ahead of
-`compinit`), so if they reappear after an update, delete them. `yadm diff` is
-where they show up.
-
-### Secrets
-
-`~/.zshenv.local` holds this machine's real secrets. It is **never tracked** —
-`.config/git/ignore` carries an anchored `/.zshenv.local` rule so it cannot be
-staged by accident.
-
-`~/.zshenv` sources it and hard-fails if it is missing or still contains
-placeholders. Non-interactive shells `exit 1` (a hard failure for scripts, cron
-and LaunchAgents); interactive shells print the error but keep running so you
-have a usable terminal in which to fix it. On a new machine `~/.zshenv`
-generates the file with `REPLACE_ME` placeholders on first run, mode 600, and
-tells you what to fill in.
-
-Currently required:
-
-```sh
-export OPENAI_API_KEY="..."
-export OLLAMA_API_KEY="..."
-export GOG_KEYRING_PASSWORD="..."
-export MQTT_USER="..."
-export MQTT_PASS="..."
-```
-
-That list mirrors `ZSHENV_REQUIRED` in `~/.zshenv`, which is what actually
-enforces it — read it there if the two ever disagree.
-
-To add another, append it to the `ZSHENV_REQUIRED` array in `~/.zshenv` so a
-machine missing it fails fast instead of silently misbehaving.
-
-## Installed Packages
-
-**Every machine gets the same CLI toolchain**, regardless of role. On macOS it
-comes from Homebrew; on Ubuntu the same tools come from four different places —
-see [Ubuntu package sources](#ubuntu-package-sources) below.
-
-Not installed on Ubuntu: `lazygit`, `flyctl`, `supabase` and `vercel` (Mac-only by choice), plus
-`ffmpeg`, `lf`, `mlx`, `mole`, `poppler` and `temporal` (Mac-only in practice —
-`mlx` is Apple-silicon and `mole` is a macOS cleanup app).
+Not installed on Ubuntu: `lazygit`, `flyctl`, `supabase` and `vercel` (Mac-only
+by choice), plus `ffmpeg`, `lf`, `mlx`, `mole`, `poppler` and `temporal`
+(Mac-only in practice; `mlx` is Apple-silicon and `mole` is a macOS cleanup
+app).
 
 - bat, better cat
 - eza, better ls
@@ -439,8 +117,8 @@ Not installed on Ubuntu: `lazygit`, `flyctl`, `supabase` and `vercel` (Mac-only 
 - mosh, better ssh
 - mosquitto, MQTT broker and clients
 - msgvault, email, meeting and calendar archive client
-- nerdfetch, improved neofetch
 - neovim, improved vim
+- nerdfetch, improved neofetch
 - ntfy, push notifications from the shell
 - ollama, local LLM runner
 - opencode, terminal coding agent
@@ -460,71 +138,66 @@ Not installed on Ubuntu: `lazygit`, `flyctl`, `supabase` and `vercel` (Mac-only 
 - yazi, terminal file manager (TUI)
 - yq, YAML processor
 
-### Fonts (Cask)
+### Runtimes, via mise
+
+Set globally by the bootstrap: python 3.14, node, bun, go, pnpm.
+
+### Python tools, via uv
+
+- tldr, better man pages
+- csvkit, CSV toolkit (in2csv, csvlook, csvgrep, etc.)
+- mlx-lm, macOS only
+
+### Node tools, via mise
+
+Declared in `.config/mise/config.toml` and installed by mise's npm backend, so
+they survive node upgrades:
+
+- qmd, local markdown search engine
+
+### Installed by script
+
+- Claude Code, via Anthropic's installer, landing in `~/.local/bin/claude`
+
+### Fonts, macOS workstations
 
 - FiraCode Nerd Font
 - JetBrains Mono
 - JetBrains Mono Nerd Font
 
-### GUI Apps (Cask)
+### GUI apps, macOS
 
-One base list of 29, with small per-machine exclusions. Adding an app means
-editing one array in the bootstrap; a machine opts out by name.
+Every Mac, headless ones included:
 
-**Base list** — what a full macOS install gets:
+1Password, 1Password CLI, Docker Desktop, Ghostty, Google Chrome, Tailscale,
+Visual Studio Code
 
-1Password, 1Password CLI, Bambu Studio, Boop, ChatGPT, Claude, CleanShot,
-Discord, Docker Desktop, Ghostty, Google Chrome, Granola, HandBrake,
+Workstations only:
+
+Bambu Studio, Boop, ChatGPT, Claude, CleanShot, Discord, Granola, HandBrake,
 Logi Options+, Microsoft Teams, MonitorControl, Obsidian, Signal, Slack,
-Spotify, Tailscale, Telegram, Trezor Suite, Visual Studio Code, VLC, Webex,
-WhatsApp, Wispr Flow, Zoom
+Spotify, Telegram, Trezor Suite, VLC, Webex, WhatsApp, Wispr Flow, Zoom
 
-Only the infrastructure half of that list — 1Password, 1Password CLI, Docker
-Desktop, Ghostty, Chrome, Tailscale, VS Code — installs on every Mac. The rest
-goes in only if you answer yes to the GUI question. A single app is dropped by
-name with `yadm config local.cask-exclude`.
+A machine opts out of individual casks by name with
+`yadm config local.cask-exclude <cask>`.
 
-On Ubuntu there are no casks. Answering yes to the GUI question gets
-`ubuntu-desktop-minimal` and
-`vlc` from apt; the rest — 1Password, Chrome, Obsidian, VS Code, Ghostty —
-install from vendor `.deb`s.
+### Mac App Store only
 
-### Mac App Store Only
+Not available via Homebrew, so the bootstrap lists them as a manual step:
 
-Not available via Homebrew — install by hand:
+NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
+extension)
 
-NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari extension)
+### GUI apps, Ubuntu
 
-### Runtimes (via mise)
-
-Set globally by the bootstrap: python 3.14, node, bun, go, pnpm.
-
-### Python Tools (via uv)
-
-- tldr, better man pages
-- csvkit, CSV toolkit (in2csv, csvlook, csvgrep, etc.)
-
-### Node Tools (via mise)
-
-Not on Homebrew. Declared in `~/.config/mise/config.toml` and installed by
-mise's npm backend, so they survive node upgrades and are refreshed by `brewup`:
-
-- qmd, local markdown search engine (see [qmd](#qmd--local-note-search))
-
-### Built from Source
-
-- **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash`,
-  landing in `~/.local/bin/claude`.
-
-  On Ubuntu, `rustup` is not installed — nothing there needs `cargo` now that
-  `tree-sitter` comes as a release binary. Add it if you want `cargo install`
-  on that box.
+Workstations get `ubuntu-desktop-minimal` and `vlc` from apt. 1Password,
+Chrome, Obsidian, VS Code, and Ghostty install from vendor `.deb`s as a manual
+step.
 
 ## Ubuntu package sources
 
-The same toolchain, but apt only has part of it. Four patterns, in dependency
-order — `ubuntu_apt` runs first because it brings `curl`, `jq`, `gnupg` and
-`unzip`, which the rest depend on.
+The same toolchain, but apt only has part of it. `ubuntu_apt` runs first because
+it brings `curl`, `jq`, `gnupg` and `unzip`, which the rest depend on.
 
 | Source | Tools |
 | ------ | ----- |
@@ -543,169 +216,17 @@ Three of those need aliases, which `.zshrc` applies behind a Linux guard:
 alias bat='batcat'; alias fd='fdfind'; alias trash='trash-put'
 ```
 
-Two things to know about the release downloads:
+The release downloads resolve `releases/latest` through the public GitHub API
+rather than `gh release download`, because `gh` needs an authenticated session
+that a fresh box does not have. The asset patterns assume **x86_64**.
 
-- They resolve `releases/latest` through the public GitHub API rather than
-  `gh release download`, because `gh` needs an authenticated session that a
-  fresh box does not have.
-- The asset patterns assume **x86_64**. Naming is inconsistent across those
-  projects (`linux_amd64`, `linux_x86_64`, `x86_64-unknown-linux-gnu`), so an
-  arm64 box needs each one checked individually.
-
-**Docker** installs from the official `docker-ce` repo on every Linux machine —
+**Docker** installs from the official `docker-ce` repo on every Linux machine,
 not Ubuntu's `docker.io` (which lags) and not the snap (whose confinement causes
 volume-permission surprises with bind mounts).
 
 `tree-sitter-cli` is not optional: `init.lua` pins nvim-treesitter to its `main`
 branch, which requires it at 0.26.1+ and specifically says to install it from a
 package manager rather than npm. apt's is too old, hence the release binary.
-
-## qmd — Local Note Search
-
-[qmd](https://github.com/tobi/qmd) is a local, offline search engine for markdown
-(BM25 + vector + LLM re-ranking). The bootstrap installs the CLI and its Claude
-Code skill:
-
-```sh
-npm install -g @tobilu/qmd
-qmd skill install --global --yes -f   # skill into ~/.agents/skills/qmd (+ ~/.claude symlink)
-```
-
-First run downloads ~2GB of models into `~/.cache/qmd/models/` (one time, offline
-thereafter).
-
-### Index notes
-
-After install, add the note directories as collections and build the index. This
-is a manual post-install step (the bootstrap only prints a reminder):
-
-```sh
-qmd collection add ~/Vaults/Main --name obsidian   # Obsidian vault
-qmd update                                        # index files
-qmd embed                                         # generate embeddings
-```
-
-**The collection names matter.** `~/.claude/CLAUDE.md`, the vault's own
-`CLAUDE.md`, and the qmd skill all reference `-c obsidian` by name. Name it
-anything else and those documented commands fail with `Collection not found`.
-
-Naming convention: bare **`obsidian`** always means the Main vault. If a second
-vault is ever indexed, it takes a suffix (`obsidian-work`, etc.) and `obsidian`
-stays pointed at Main — so nothing already written has to be revised.
-
-Verify and search:
-
-```sh
-qmd collection list
-qmd query "what did we decide about X"
-```
-
-Re-run `qmd update && qmd embed` after notes change. Scope searches to a
-collection with `-c obsidian`.
-
-### Optional: MCP server
-
-For faster, persistent access from Claude (keeps models warm across queries),
-run qmd as an HTTP MCP daemon:
-
-```sh
-qmd mcp --http --daemon            # localhost:8181
-```
-
-Then point Claude Code/Desktop at it (see qmd's `references/mcp-setup.md`).
-
-## gog — Google Workspace CLI
-
-[gog](https://github.com/openclaw/gogcli) fronts Gmail, Calendar, Drive, Docs and
-the rest. The bootstrap installs the binary but authorizes nothing — client
-secrets live in the keyring and tokens come from a browser consent flow, so
-**every new Mac needs this done by hand.**
-
-Two accounts, each on its own OAuth client and its own Cloud project. Register
-both clients from their downloaded JSON, then authorize each account:
-
-```sh
-gog auth credentials set <personal-client.json> --client default
-gog auth credentials set <work-client.json> --client <work> --domain <work-domain>
-gog auth add <personal-account> --services all
-gog auth add <work-account> --client <work> --services all
-gog auth alias set <alias> <account>
-```
-
-Quote only the path segment that contains a space — quoting the whole path
-suppresses both `~` expansion and the glob, and gog then fails on a filename that
-does not exist.
-
-`--domain` binds the second client to that domain, so gog selects it
-automatically and `--client` is never needed again. Grant every scope at the
-consent screen — a partial grant lands as partial scopes and fails later one API
-at a time. Verify with `gog auth list`: both rows should carry the same long
-service list.
-
-**Both accounts matter, and a box with only one looks like it works.** Work mail
-is on the work account, and so is the only complete calendar view — only that
-account sees every calendar at once:
-
-```sh
-gog -a <work-alias> calendar events --calendars "..." --today --plain
-```
-
-The accounts themselves, their client names, Cloud projects, and where each
-`client_secret` JSON is filed are in the vault note "gog OAuth Setup" — kept
-there rather than here, because this repo is public.
-
-## Ghostty
-
-Terminal emulator. Config at `.config/ghostty/config`.
-
-- Font: FiraCode Nerd Font
-- Global quick terminal: `ctrl+space`
-- Shift+enter sends literal newline
-- SSH env shell integration enabled
-
-## lf (Terminal File Manager)
-
-Config at `.config/lf/lfrc` with a custom previewer script.
-
-Key bindings:
-- `g<letter>` jumps: `gh` home, `gd` Desktop, `go` the Obsidian vault, `gC` `~/.config`, plus one per top-level Desktop folder (see `lfrc`)
-- `a` create directory, `T` create file, `D` trash, `e` open in nvim, `x` extract archive
-
-On quit, lf writes its current directory so the shell can follow (pair with a shell function in `.zshrc`).
-
-## vim and neovim
-
-Main editor is neovim but `.vimrc` keeps vim usable on systems without neovim.
-
-`.config/nvim/init.lua` is a standalone neovim config managed by lazy.nvim with these plugins:
-
-- catppuccin (default theme: catppuccin-mocha)
-- lualine (status line)
-- gitsigns (git integration)
-- telescope (fuzzy finder)
-- treesitter (syntax highlighting)
-- rainbow_csv (CSV handling)
-- which-key (keybinding help)
-- gruvbox, nord, tokyonight (additional themes)
-
-Theme switching via `:Theme <name>`.
-
-## tmux
-
-Prefix is `ctrl-a` (not the default `ctrl-b`). Status bar at the top.
-
-**No plugin manager.** The config is plain tmux (3.6) with the status bar styled
-inline — tpm was dropped, and the bootstrap no longer clones it. The previous
-tpm-based config is kept at `~/.tmux.conf.bak` if you ever want to look back.
-
-## Color Schemes
-
-Good color schemes with broad support across nvim, ghostty, tmux, and obsidian:
-
-- [Catppuccin](https://catppuccin.com/)
-- [Gruvbox](https://github.com/ellisonleao/gruvbox.nvim)
-- [Nord](https://www.nordtheme.com/ports/vim)
-- [Tokyo Night](https://github.com/folke/tokyonight.nvim)
 
 ## Philosophy
 
@@ -716,6 +237,6 @@ Package installation preference on Mac:
 3. uv for Python-based tools
 4. Direct when not available via brew or uv
 
-Machine-specific state — local LLM models, API keys, app logins — stays out of
-the repo on purpose. The bootstrap gets a machine to the point where those can
-be added, and no further.
+Machine-specific state, such as local LLM models, API keys, and app logins,
+stays out of the repo on purpose. The bootstrap gets a machine to the point
+where those can be added, and no further.
