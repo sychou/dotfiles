@@ -142,10 +142,16 @@ print -r -- "result: $result — $detail"
 
 # Healthchecks.io ping — success or degraded pings the check; failure sends /fail.
 # The /fail endpoint records the check as "down" and triggers the alert.
-if [[ $result == failed ]]; then
-  curl -fsS -m 10 --retry 3 "https://hc-ping.com/0e27ff9a-7531-4552-8d73-ad4bd14c5cd8/fail" && true
+# The check's ping key is a credential (anyone holding it can silence or
+# trigger the alert), so it comes from ~/.zshenv.local as HC_MSGVAULT_UUID
+# rather than living here. Unset means no ping, which Healthchecks reports as
+# "down" once the grace period passes — the safe direction to fail.
+if [[ -z ${HC_MSGVAULT_UUID:-} ]]; then
+  print "WARN: HC_MSGVAULT_UUID unset — Healthchecks not pinged"
+elif [[ $result == failed ]]; then
+  curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HC_MSGVAULT_UUID}/fail" && true
 else
-  curl -fsS -m 10 --retry 3 "https://hc-ping.com/0e27ff9a-7531-4552-8d73-ad4bd14c5cd8" && true
+  curl -fsS -m 10 --retry 3 "https://hc-ping.com/${HC_MSGVAULT_UUID}" && true
 fi
 
 [[ $result == failed ]] && exit 1

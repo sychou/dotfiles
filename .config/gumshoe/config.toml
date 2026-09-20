@@ -59,8 +59,3 @@ sender = "psyoushouldknow@substack.com"
 # exit code (blocked: 0 = rotated, retry; nonzero = halt). Rotation is managed
 # by `jaunt`, which auto-discovers exit nodes; the node policy (country filter,
 # cooldown) lives in ~/.config/jaunt/config.toml under [ns.youtube].
-
-# Previous curated list (now superseded by jaunt's [ns.youtube] filter, which
-# selects US Mullvad nodes). To rotate through your own nodes too, add them to
-# jaunt — they aren't picked up by a country filter:
-#   wells.taila3179.ts.net, lem.taila3179.ts.net

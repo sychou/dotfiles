@@ -1,9 +1,9 @@
 #!/bin/zsh
-# report-mqtt — publish a job result to the MQTT broker on bradbury.
+# report-mqtt — publish a job result to the MQTT broker.
 #
 # Named for its transport, not its purpose: a report-ntfy sibling will carry the
-# fallback path for wells, which cannot reach the Purnell broker when the
-# tailnet or bradbury is down.
+# fallback path for a machine that cannot reach the broker when the tailnet or
+# the broker itself is down.
 #
 #   report-mqtt <job> <result> [detail]
 #   report-mqtt msgvault-nightly ok "514606 messages, snapshot 20260807T..."
@@ -39,14 +39,20 @@ if [[ -z ${MQTT_USER:-} || -z ${MQTT_PASS:-} ]]; then
   exit 0
 fi
 
-# bradbury is on the Purnell LAN; wells reaches it over the tailnet. Try the LAN
-# first so co-located machines do not take a needless tailnet hop, then fall
-# back. MQTT_HOST overrides both.
+# Broker addresses are topology, so they live in ~/.zshenv.local too:
+# MQTT_BROKERS is a space-separated list tried in order — LAN address first so
+# co-located machines do not take a needless tailnet hop, tailnet address as
+# the fallback for a machine that has left the house. MQTT_HOST pins a single
+# address and overrides the list; a fixed-position machine can use it, a
+# laptop must not.
 typeset -a brokers
 if [[ -n ${MQTT_HOST:-} ]]; then
   brokers=("$MQTT_HOST")
+elif [[ -n ${MQTT_BROKERS:-} ]]; then
+  brokers=(${=MQTT_BROKERS})
 else
-  brokers=(192.168.4.25 100.66.107.50)
+  print -u2 "report-mqtt: MQTT_BROKERS/MQTT_HOST unset — not reporting '$job'"
+  exit 0
 fi
 
 pub=${commands[mosquitto_pub]:-/opt/homebrew/bin/mosquitto_pub}

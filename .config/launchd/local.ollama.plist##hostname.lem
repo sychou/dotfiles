@@ -4,10 +4,8 @@
 <dict>
   <key>Label</key><string>local.ollama</string>
   <!-- lem: LaunchDaemon (system domain), runs as sean regardless of login
-       state. Serves the network (0.0.0.0). FileVault stays ON (SOC2) — after
-       an unplanned reboot the pre-boot unlock still needs a console visit;
-       use `sudo fdesetup authrestart` for planned reboots to come back
-       unattended. Installed by the bootstrap, or by hand with
+       state. Serves the network (0.0.0.0). Installed by the bootstrap, or by
+       hand with
        ~/bin/install-launch-daemon.sh ~/.config/launchd/local.ollama.plist
        M4 Pro, 64 GB. Measured: KV cache ~185 KB/token on qwen3.6:35b-mlx,
        allocated lazily. 64K filled ~= 32 GB total, inside the ~48 GB GPU

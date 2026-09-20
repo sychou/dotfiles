@@ -83,6 +83,9 @@ typeset -g ZSHENV_LOCAL=${HOME}/.zshenv.local
 # launchd, where no op session exists. Scripts reach them by being zsh with a
 # proper shebang — zsh sources ~/.zshenv for non-interactive shells too.
 typeset -ga ZSHENV_REQUIRED=(OPENAI_API_KEY OLLAMA_API_KEY GOG_KEYRING_PASSWORD MQTT_USER MQTT_PASS)
+# Optional, same file, not enforced because only some machines need them:
+#   MQTT_BROKERS      space-separated broker addresses, tried in order (bin/report-mqtt)
+#   HC_MSGVAULT_UUID  Healthchecks.io ping key for the nightly archive job (bin/msgvault-nightly)
 
 if [[ ! -r $ZSHENV_LOCAL ]]; then
   (

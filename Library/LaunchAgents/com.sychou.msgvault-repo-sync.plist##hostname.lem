@@ -6,7 +6,7 @@
   <!-- lem: pull the msgvault backup repo from wells.
 
        wells holds the archive and writes snapshots to its own internal drive;
-       lem keeps an offsite copy in the other house. The repo is
+       lem keeps an offsite copy. The repo is
        content-addressed, so this is genuinely incremental — after the first
        ~91G seed only new packs cross the tailnet, and a night that adds 45,000
        messages moved 4.1G.
