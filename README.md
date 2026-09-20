@@ -8,7 +8,7 @@ Every machine gets the **same tracked configs and the same core CLI toolchain**.
 Bootstrap is run by hand, so it simply asks what else this one needs:
 
 ```text
-  Setting up huxley. Core CLI tools and tracked configs install either way.
+  Setting up <host>. Core CLI tools and tracked configs install either way.
 
   Install GUI apps, fonts and desktop tooling? [Y/n]
   Set this machine up to run services unattended? [y/N]
@@ -16,9 +16,9 @@ Bootstrap is run by hand, so it simply asks what else this one needs:
   Advertise it as a Tailscale exit node? [y/N]
 ```
 
-The answers are independent — lem says yes to the first two, being a daily
-driver that also serves ollama to the tailnet. The GUI question defaults to yes
-on macOS and no on Linux; the rest default to no.
+The answers are independent — a workstation that also serves ollama to the
+tailnet says yes to the first two. The GUI question defaults to yes on macOS and
+no on Linux; the rest default to no.
 
 Two of them are not quite independent. **msgvault implies unattended services**,
 because the archive has to keep running whether or not anyone is logged in — say
@@ -26,12 +26,13 @@ yes to it having said no to the one above and the bootstrap turns that on and
 says so. And the **exit-node question is only asked** of a machine that is
 running services at all.
 
-Saying yes to msgvault schedules the nightly sync-then-backup pass at 06:00,
-which is what wells does, and queues the deploy sequence as a manual step.
+Saying yes to msgvault schedules the nightly sync-then-backup pass at 06:00 and
+queues the deploy sequence as a manual step. Only one machine is the archive
+server; every other one runs the client — see [Machines](#machines).
 
-Nothing is remembered between runs, and nothing is keyed on the hostname, so
-there is no per-machine state to get stale or wrong. Re-running the bootstrap
-means answering three questions again.
+Nothing is remembered between runs, and the roles are not keyed on the hostname,
+so there is no per-machine state to get stale or wrong. Re-running the bootstrap
+means answering the questions again.
 
 One switch is data rather than a question, because it is a standing property of
 a machine rather than something to decide each time:
@@ -62,15 +63,42 @@ and, if it needs them, adding alts — not editing the bootstrap.
 > *installed*, not what gets removed. A machine that already has extra apps keeps
 > them until you `brew uninstall --cask` them yourself.
 
+## Machines
+
+Which machine does what is recorded in two places, and this README is neither.
+The **roles** are the bootstrap answers, given fresh each run. The **jobs** are
+the `##hostname.<host>` alts above: which plists and host-extras exist is the
+record of which box runs which service. Everything else about a specific
+machine — its hardware, what it is for, what to check when it misbehaves — lives
+in private notes, because this repo is public. Where the bootstrap says "see
+README 'Machines'", it means those notes.
+
+Adding a machine:
+
+1. Pick a hostname and set it before cloning (below), since the alts key on it.
+2. Run the bootstrap and answer the role questions.
+3. If it serves something, add the alts. An ollama host that must keep running
+   with nobody logged in gets `~/.config/launchd/local.ollama.plist##hostname.<host>`,
+   a LaunchDaemon that binds `OLLAMA_HOST=0.0.0.0` so the tailnet can reach it;
+   the bootstrap sees it and leaves Homebrew's own ollama agent alone. A
+   scheduled job gets a LaunchAgent alt. One-offs go in a `host-extras` alt.
+4. Write the machine's note.
+
+Two client configs are copied by hand from a machine that already has them,
+because each carries a credential:
+
+- `~/.msgvault/config.toml` — points `[remote]` at the archive server and holds
+  its API key. Without it there is no email and no meeting history to search.
+- `~/.zshenv.local` — see [Secrets](#secrets).
+
 ## Setting Up a New Mac
 
-Remove all apps from Dock (personal preference).
-
-Install NextDNS from App Store and set up with custom ID from https://my.nextdns.io.
+Install NextDNS from the App Store and sign in, so filtering is on before
+anything else phones home.
 
 You need a terminal before you have Homebrew. Either use the built-in
 Terminal.app for the next few steps, or download Ghostty from
-https://ghostty.org/ and start it.
+<https://ghostty.org/> and start it.
 
 > If you install Ghostty by hand, adopt it into Homebrew afterwards rather than
 > letting the bootstrap install a second copy:
@@ -111,6 +139,12 @@ running it** — otherwise none of this machine's alts are materialised:
 ```sh
 sudo scutil --set LocalHostName <hostname>
 ```
+
+Two things about Claude Code that the bootstrap cannot finish. `~/.claude/CLAUDE.md`
+is tracked, but its first line imports `~/.config/AGENTS.md`, a symlink that a
+separate skills repo's install script creates; until that repo is cloned and
+installed, Claude Code runs without the shared instructions. And
+`~/.claude/settings.json` is per-machine and not tracked.
 
 ### GitHub & Commit Signing
 
@@ -181,23 +215,21 @@ A machine that never pushes (deploy-key boxes) should instead put
 
 ### Configuration
 
-- Start 1Password and login
-- Start Chrome
-    - Change default browser
-    - Set up sync
-    - Set up Kagi as default search
-- Start Obsidian
-    - Set up vaults via Sync
-    - Place in `~/Vaults` (it will automatically create a subdirectory named after the vault)
+- Start 1Password, sign in, and enable the SSH agent (above)
+- Start Chrome: make it the default browser, turn on sync, set the search engine
+- Start Obsidian, sign in to Sync, and place the vaults under `~/Vaults` (it
+  creates a subdirectory per vault)
 - Index notes in qmd (see [qmd — Local Note Search](#qmd--local-note-search))
-- Authorize gog for both Google accounts (see [gog — Google Workspace CLI](#gog--google-workspace-cli))
+- Authorize gog for each Google account (see [gog — Google Workspace CLI](#gog--google-workspace-cli))
+- Copy `~/.msgvault/config.toml` from another machine (see [Machines](#machines))
+- Clone the skills repo and run its install, so `~/.config/AGENTS.md` exists
 - Pull any local models you rely on — these are machine-specific and the
   bootstrap deliberately does not install them:
-  `ollama pull nomic-embed-text` (embeddings), plus whatever chat model you want
-- System Settings
-    - Automatically hide and show the Dock
-    - Set up Internet Accounts
-    - Enable iCloud > iCloud Drive > Desktop & Document Folders
+  `ollama pull nomic-embed-text` (embeddings), plus whatever chat model fits.
+  A machine too small for the models it wants instead exports `OLLAMA_HOST`
+  in `~/.zshenv.local`, pointed at a bigger box on the tailnet
+- System Settings: hide the Dock, add Internet Accounts, enable
+  iCloud Drive > Desktop & Documents Folders
 - SSH keys and the commit-signing key come from 1Password's SSH agent (see
   "GitHub & Commit Signing" above). `~/.ssh/config` **is** tracked and points
   `IdentityAgent` at the 1Password agent socket, so terminal SSH routes through
@@ -244,9 +276,10 @@ That is yadm's alternate-file mechanism: it checks out the variant matching the
 current OS or hostname and ignores the rest, which is how one repo holds
 per-platform and per-machine versions of the same file.
 
-**Not tracked, by design:** `~/.zshenv.local` (secrets) and `~/.ssh/config.local`
-(per-machine key selection). Both are machine-specific and stay out of the repo;
-see [Secrets](#secrets).
+**Not tracked, by design:** `~/.zshenv.local` (secrets), `~/.ssh/config.local`
+and `~/.config/git/local` (per-machine key selection), `~/.msgvault/config.toml`
+(archive API key), and `~/.claude/settings.json` (Claude Code's own preferences).
+All are machine-specific and stay out of the repo; see [Secrets](#secrets).
 
 ## zsh
 
@@ -339,6 +372,12 @@ Because mise's shims are prepended in `.zshrc`, mise-managed runtimes win over
 Homebrew ones. That is why `node` resolves to mise's copy even though Homebrew
 also has one installed as an `opencode` dependency.
 
+Installers like to append to these files. Docker Desktop adds a `PATH` block to
+`~/.zprofile` and a completions block to `~/.zshrc`; both are already covered
+(`~/.docker/bin` in `path.zsh`, `~/.docker/completions` on `fpath` ahead of
+`compinit`), so if they reappear after an update, delete them. `yadm diff` is
+where they show up.
+
 ### Secrets
 
 `~/.zshenv.local` holds this machine's real secrets. It is **never tracked** —
@@ -398,6 +437,8 @@ Not installed on Ubuntu: `lazygit` and `flyctl` (Mac-only by choice), plus
 - mlx, Apple ML framework
 - mole, port forwarding / tunnels
 - mosh, better ssh
+- mosquitto, MQTT broker and clients
+- msgvault, email, meeting and calendar archive client
 - nerdfetch, improved neofetch
 - neovim, improved vim
 - ntfy, push notifications from the shell
@@ -467,10 +508,6 @@ Not on Homebrew. Declared in `~/.config/mise/config.toml` and installed by
 mise's npm backend, so they survive node upgrades and are refreshed by `brewup`:
 
 - qmd, local markdown search engine (see [qmd](#qmd--local-note-search))
-
-> **Granola meetings are not here any more.** muesli was retired on 2026-08-06.
-> Meetings now sync into msgvault via Granola's official API and are searched
-> with `msgvault`, not `qmd`. The `granola` collection no longer exists.
 
 ### Built from Source
 
@@ -629,7 +666,7 @@ Terminal emulator. Config at `.config/ghostty/config`.
 Config at `.config/lf/lfrc` with a custom previewer script.
 
 Key bindings:
-- `gh` home, `gd` Desktop, `gi` INBOX, `gp` PROJECTS, `gc` CHOUFAM, `gl` LIBRARY, `ga` ARCHIVES, `gC` ~/.config
+- `g<letter>` jumps: `gh` home, `gd` Desktop, `go` the Obsidian vault, `gC` `~/.config`, plus one per top-level Desktop folder (see `lfrc`)
 - `a` create directory, `T` create file, `D` trash, `e` open in nvim, `x` extract archive
 
 On quit, lf writes its current directory so the shell can follow (pair with a shell function in `.zshrc`).
