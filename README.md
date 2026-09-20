@@ -182,8 +182,8 @@ project, are installed by hand where they are needed rather than listed here.
 
 Not available via Homebrew, so the bootstrap lists them as a manual step:
 
-NextDNS, Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
-extension)
+Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
+extension). NextDNS has no cask either and is downloaded from its site.
 
 ### GUI apps, Ubuntu
 

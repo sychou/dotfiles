@@ -269,9 +269,10 @@ macos_casks() {
     log "Installing GUI apps (${#want[@]} casks)"
     brew install --cask "${want[@]}"
 
-    [ -n "$WORKSTATION" ] && manual "Install the App Store-only apps: NextDNS,
-      Paprika Recipe Manager 3, Pixelmator Pro, Obsidian Web Clipper (Safari
-      extension). See the vault note 'How to Set Up a New Machine'."
+    [ -n "$WORKSTATION" ] && manual "Install the apps Homebrew cannot: NextDNS (download from
+      nextdns.io), and from the App Store Paprika Recipe Manager 3, Pixelmator
+      Pro, Obsidian Web Clipper (Safari extension). See the vault note
+      'How to Set Up a New Machine'."
     return 0
 }
 
