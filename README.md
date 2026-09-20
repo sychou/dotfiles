@@ -413,7 +413,7 @@ machine missing it fails fast instead of silently misbehaving.
 comes from Homebrew; on Ubuntu the same tools come from four different places —
 see [Ubuntu package sources](#ubuntu-package-sources) below.
 
-Not installed on Ubuntu: `lazygit` and `flyctl` (Mac-only by choice), plus
+Not installed on Ubuntu: `lazygit`, `flyctl`, `supabase` and `vercel` (Mac-only by choice), plus
 `ffmpeg`, `lf`, `mlx`, `mole`, `poppler` and `temporal` (Mac-only in practice —
 `mlx` is Apple-silicon and `mole` is a macOS cleanup app).
 
@@ -448,12 +448,14 @@ Not installed on Ubuntu: `lazygit` and `flyctl` (Mac-only by choice), plus
 - poppler, PDF utilities (pdftotext, etc.)
 - ripgrep, better grep
 - starship, better prompt
+- supabase, Supabase CLI (local stack runs in Docker Desktop)
 - temporal, workflow engine
 - tmux, terminal multiplexer
 - trash, safe rm (sends to macOS Trash)
 - tree, directory listing
 - tree-sitter-cli, parser generator/CLI
 - uv, Python package manager
+- vercel, Vercel CLI
 - yadm, dotfile manager
 - yazi, terminal file manager (TUI)
 - yq, YAML processor

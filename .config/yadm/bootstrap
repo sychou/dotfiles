@@ -228,12 +228,14 @@ macos_formulae() {
         poppler \
         ripgrep \
         starship \
+        supabase \
         temporal \
         tmux \
         trash \
         tree \
         tree-sitter-cli \
         uv \
+        vercel \
         yadm \
         yazi \
         yq
