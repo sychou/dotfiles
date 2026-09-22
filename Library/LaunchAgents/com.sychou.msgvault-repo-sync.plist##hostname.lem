@@ -15,14 +15,23 @@
        replicates a finished snapshot rather than a half-written one.
        StartCalendarInterval, not StartInterval: this wants a specific hour
        relative to wells' cron, not "every N seconds from whenever it
-       loaded". -->
+       loaded".
+
+       rsync && curl: a successful pull pings the lem-backup-pulled check on
+       Healthchecks.io (24 h period, 6 h grace, routes to Pushover). A failed
+       pull sends no ping and the check goes down. Without the curl, launchd
+       exits 0 silently and nobody hears about a stalled mirror — which is
+       how the check went down on 2026-09-17 after the ping was lost in the
+       2026-08-22 dotfiles refactor.
+
+       The ping URL is a write-only secret, so it lives in the untracked
+       ~/.config/healthchecks/lem-backup-pulled.url (same contract as
+       ~/.zshenv.local) rather than in this tracked file. -->
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/rsync</string>
-    <string>-a</string>
-    <string>--partial</string>
-    <string>wells:/home/sean/backups/msgvault/</string>
-    <string>/Users/sean/Backups/msgvault/</string>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>/usr/bin/rsync -a --partial wells:/home/sean/backups/msgvault/ /Users/sean/Backups/msgvault/ &amp;&amp; /usr/bin/curl -fsS -m 10 --retry 3 "$(cat /Users/sean/.config/healthchecks/lem-backup-pulled.url)"</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
